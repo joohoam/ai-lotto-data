@@ -1,28 +1,24 @@
 {
-  "1199": {
-    "2": {
-      "totalPrize": 4804227900,
-      "winners": 75,
-      "perGamePrize": 64056372,
-      "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-    },
-    "3": {
-      "totalPrize": 4804229280,
-      "winners": 3504,
-      "perGamePrize": 1371070,
-      "criteria": "당첨번호 5개 숫자일치"
-    },
-    "4": {
-      "totalPrize": 7853650000,
-      "winners": 157073,
-      "perGamePrize": 50000,
-      "criteria": "당첨번호 4개 숫자일치"
-    },
-    "5": {
-      "totalPrize": 13024925000,
-      "winners": 2604985,
-      "perGamePrize": 5000,
-      "criteria": "당첨번호 3개 숫자일치"
-    }
+  "drwNo": 1200,
+  "date": "2025-11-29",
+  "second": {
+    "totalAmount": 4714599760,
+    "winners": 80,
+    "prizePerGame": 58932497
+  },
+  "third": {
+    "totalAmount": 4714601472,
+    "winners": 3584,
+    "prizePerGame": 1315458
+  },
+  "fourth": {
+    "totalAmount": 8087700000,
+    "winners": 161754,
+    "prizePerGame": 50000
+  },
+  "fifth": {
+    "totalAmount": 13365300000,
+    "winners": 2673060,
+    "prizePerGame": 5000
   }
 }
