@@ -1,26 +1,26 @@
 {
-  "1201": {
+  "1202": {
     "2": {
-      "totalPrize": 4479426504,
-      "winners": 84,
-      "perGamePrize": 53326506,
+      "totalPrize": 4480958608,
+      "winners": 109,
+      "perGamePrize": 41109712,
       "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
     },
     "3": {
-      "totalPrize": 4479427899,
-      "winners": 3321,
-      "perGamePrize": 1348819,
+      "totalPrize": 4480959192,
+      "winners": 3764,
+      "perGamePrize": 1190478,
       "criteria": "당첨번호 5개 숫자일치"
     },
     "4": {
-      "totalPrize": 8302500000,
-      "winners": 166050,
+      "totalPrize": 9010600000,
+      "winners": 180212,
       "perGamePrize": 50000,
       "criteria": "당첨번호 4개 숫자일치"
     },
     "5": {
-      "totalPrize": 13556885000,
-      "winners": 2711377,
+      "totalPrize": 13618850000,
+      "winners": 2723770,
       "perGamePrize": 5000,
       "criteria": "당첨번호 3개 숫자일치"
     }
