@@ -1,6 +1,6 @@
 name: Update lotto data (heatmap + prize 2~5)
 
-on:
+"on":
   workflow_dispatch:
   schedule:
     # KST 일요일 00:10 = UTC 토요일 15:10
@@ -39,4 +39,3 @@ jobs:
           git add data/heatmap.json data/prize_2to5.json
           git commit -m "chore: update heatmap + prize 2~5"
           git push
-
