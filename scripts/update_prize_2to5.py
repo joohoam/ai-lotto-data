@@ -19,16 +19,25 @@ def to_int(s: str) -> int:
     return int(digits) if digits else 0
 
 def get_latest_round() -> int:
+    """
+    byWin 페이지의 select option들 중 숫자 value를 전부 모아서 최댓값을 최신 회차로 사용.
+    (기존처럼 첫 option/selected option을 쓰면 1회차를 잡는 경우가 있음)
+    """
     r = requests.get(BASE, headers=HEADERS, timeout=20)
     r.raise_for_status()
     soup = BeautifulSoup(r.text, "lxml")
 
-    # 흔히 select option에 최신 회차가 노출됨
-    opt = soup.select_one("select option[selected]") or soup.select_one("select option")
-    if opt and opt.get("value", "").isdigit():
-        return int(opt["value"])
+    opts = soup.select("select option")
+    values = []
+    for o in opts:
+        v = (o.get("value") or "").strip()
+        if v.isdigit():
+            values.append(int(v))
 
-    # fallback: “1200회” 패턴
+    if values:
+        return max(values)
+
+    # fallback: “1200회” 같은 패턴이 텍스트에 있을 때
     m = re.search(r"(\d+)\s*회", soup.get_text(" ", strip=True))
     if m:
         return int(m.group(1))
@@ -52,6 +61,7 @@ def parse_2to5(html: str) -> dict:
             winners = to_int(tds[2]) if len(tds) > 2 else 0
             per = to_int(tds[3]) if len(tds) > 3 else 0
             criteria = tds[4] if len(tds) > 4 else ""
+
             data[rank] = {
                 "totalPrize": total,
                 "winners": winners,
@@ -59,6 +69,7 @@ def parse_2to5(html: str) -> dict:
                 "criteria": criteria,
             }
 
+    # 누락되면 구조 변경/파싱 실패로 판단
     for rnk in ["2", "3", "4", "5"]:
         if rnk not in data:
             raise RuntimeError(f"{rnk}등 파싱 실패(페이지 구조 변경 가능)")
@@ -77,21 +88,24 @@ def main():
 
     latest = get_latest_round()
 
-    # 최근 40회만 갱신(필요시 조정)
+    # 최근 40회만 갱신 (원하면 숫자 조정)
     start = max(1, latest - 40)
+
     for rnd in range(start, latest + 1):
         key = str(rnd)
+
+        # 이미 있고 2~5등 다 있으면 스킵
         if key in existing and all(k in existing[key] for k in ["2", "3", "4", "5"]):
             continue
 
         r = requests.get(URL.format(round=rnd), headers=HEADERS, timeout=20)
         r.raise_for_status()
+
         existing[key] = parse_2to5(r.text)
-        time.sleep(0.25)
+        time.sleep(0.25)  # 과도한 요청 방지
 
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(existing, f, ensure_ascii=False, indent=2)
 
 if __name__ == "__main__":
     main()
-
