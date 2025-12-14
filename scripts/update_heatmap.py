@@ -7,8 +7,7 @@ OUT = "data/heatmap.json"
 API = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={round}"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-# ✅ 최근 몇 회 기준으로 히트맵(출현 빈도) 만들지
-WINDOW = 40
+RANGE = 40  # ✅ 최근 40회
 
 def ensure_dirs():
     os.makedirs("data", exist_ok=True)
@@ -18,20 +17,7 @@ def fetch_round(rnd: int) -> dict:
     r.raise_for_status()
     return r.json()
 
-def get_latest_round_guess(max_tries: int = 60) -> int:
-    """
-    존재하는 최신 회차를 탐색해서 찾는다.
-    (API는 없는 회차는 returnValue != success)
-    """
-    start = 1200
-    if os.path.exists(OUT):
-        try:
-            with open(OUT, "r", encoding="utf-8") as f:
-                j = json.load(f) or {}
-                start = int(j.get("meta", {}).get("latestRound", start))
-        except Exception:
-            pass
-
+def guess_latest(start: int = 1200, max_tries: int = 80) -> int:
     cand = start
     for _ in range(max_tries):
         js = fetch_round(cand)
@@ -42,38 +28,49 @@ def get_latest_round_guess(max_tries: int = 60) -> int:
                 continue
             return cand
         cand -= 1
+    raise RuntimeError("latestRound 찾기 실패. start 값을 조정하세요.")
 
-    raise RuntimeError("latestRound를 찾지 못했습니다. start 값을 조정하세요.")
+def now_kst_iso():
+    kst = datetime.timezone(datetime.timedelta(hours=9))
+    return datetime.datetime.now(kst).isoformat(timespec="seconds")
 
 def main():
     ensure_dirs()
 
-    latest = get_latest_round_guess()
-    start = max(1, latest - WINDOW + 1)
+    # 이전 파일 meta.latestRound가 있으면 시작점으로 활용
+    start = 1200
+    if os.path.exists(OUT):
+        try:
+            with open(OUT, "r", encoding="utf-8") as f:
+                j = json.load(f) or {}
+            start = int((j.get("meta", {}) or {}).get("latestRound", start))
+        except Exception:
+            pass
+
+    latest = guess_latest(start=start)
+    start_round = max(1, latest - RANGE + 1)
 
     counts = {str(i): 0 for i in range(1, 46)}
 
-    for rnd in range(start, latest + 1):
+    for rnd in range(start_round, latest + 1):
         js = fetch_round(rnd)
         if js.get("returnValue") != "success":
             continue
-
-        nums = [js.get(f"drwtNo{i}") for i in range(1, 7)]
+        nums = [
+            js.get("drwtNo1"), js.get("drwtNo2"), js.get("drwtNo3"),
+            js.get("drwtNo4"), js.get("drwtNo5"), js.get("drwtNo6"),
+        ]
         for n in nums:
             if isinstance(n, int) and 1 <= n <= 45:
                 counts[str(n)] += 1
 
-    now = datetime.datetime.now(
-        datetime.timezone(datetime.timedelta(hours=9))
-    ).isoformat(timespec="seconds")
-
     out = {
         "meta": {
             "latestRound": latest,
-            "range": WINDOW,
-            "updatedAt": now
+            "range": RANGE,
+            "updatedAt": now_kst_iso(),
         },
-        "counts": counts
+        "counts": counts,
     }
 
     with open(OUT, "w", encoding="utf-8") as f:
