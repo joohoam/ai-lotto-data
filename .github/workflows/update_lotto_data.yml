@@ -6,10 +6,9 @@ name: Update lotto data (heatmap + prize 2~5)
     # KST 일요일 00:10 = UTC 토요일 15:10
     - cron: "10 15 * * 6"
 
-# ✅ 동시에 여러 번 실행되면 push 충돌이 나기 쉬워서 잠금
 concurrency:
-  group: ai-lotto-data-update
-  cancel-in-progress: false
+  group: ai-lotto-data-update-main
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -21,7 +20,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # rebase/push 위해 전체 히스토리 필요
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -37,24 +37,25 @@ jobs:
       - name: Update heatmap JSON
         run: python scripts/update_heatmap.py
 
-      # (선택) 디버그: 파일 생성/변경 확인
       - name: Debug - show generated files and git status
         run: |
           echo "=== ls data ==="
           ls -la data || true
           echo "=== heatmap.json (head) ==="
-          head -c 800 data/heatmap.json || true
+          head -c 400 data/heatmap.json || true
           echo
           echo "=== prize_2to5.json (head) ==="
-          head -c 800 data/prize_2to5.json || true
+          head -c 400 data/prize_2to5.json || true
           echo
           echo "=== git status ==="
           git status --porcelain
           echo "=== git diff (stat) ==="
           git diff --stat
 
-      - name: Commit & push if changed
+      - name: Commit & push if changed (with rebase + retry)
         run: |
+          set -e
+
           if git diff --quiet; then
             echo "No changes"
             exit 0
@@ -66,8 +67,20 @@ jobs:
           git add data/heatmap.json data/prize_2to5.json
           git commit -m "chore: update heatmap + prize 2~5" || echo "Nothing to commit"
 
-          # ✅ remote main 최신 커밋 반영 후 push (fetch first 방지)
-          git fetch origin main
-          git rebase origin/main
+          # ✅ fetch-first 충돌이 나면 rebase 후 재시도
+          for i in 1 2 3 4 5; do
+            echo "=== Push attempt $i ==="
+            git fetch origin main
+            git pull --rebase origin main
 
-          git push origin HEAD:main
+            if git push origin HEAD:main; then
+              echo "Push succeeded"
+              exit 0
+            fi
+
+            echo "Push failed, retrying..."
+            sleep 2
+          done
+
+          echo "Push failed after retries"
+          exit 1
