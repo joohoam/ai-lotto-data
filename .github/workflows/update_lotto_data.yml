@@ -12,12 +12,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: ai-lotto-data-update
+  group: lotto-data-update
   cancel-in-progress: false
 
 jobs:
   update:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,16 +35,32 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r scripts/requirements.txt
 
-      - name: Update number heatmap JSON
-        run: python scripts/update_heatmap.py
-
       - name: Update prize 2~5 JSON
         run: python scripts/update_prize_2to5.py
+
+      - name: Update number heatmap JSON
+        run: python scripts/update_heatmap.py
 
       - name: Update region 1~2 JSON
         run: python scripts/update_region_1to2.py
 
+      - name: Debug - show generated files and git status
+        run: |
+          echo "=== ls data ==="
+          ls -al data || true
+          echo "=== head heatmap.json ==="
+          head -n 40 data/heatmap.json || true
+          echo "=== head prize_2to5.json ==="
+          head -n 40 data/prize_2to5.json || true
+          echo "=== head region_1to2.json ==="
+          head -n 40 data/region_1to2.json || true
+          echo "=== git status ==="
+          git status --porcelain || true
+          echo "=== git diff (stat) ==="
+          git diff --stat || true
+
       - name: Commit & push if changed (with rebase + retry)
+        shell: bash
         run: |
           set -e
 
@@ -55,16 +72,26 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          # 커밋 대상(원하는 파일만 추적)
           git add data/heatmap.json data/prize_2to5.json data/region_1to2.json
-          git commit -m "chore: update heatmap + prize 2~5 + region 1~2" || true
 
+          # 변경이 없으면 종료
+          if git diff --cached --quiet; then
+            echo "No staged changes"
+            exit 0
+          fi
+
+          git commit -m "chore: update heatmap + prize 2~5 + region 1~2"
+
+          # 원격에 다른 커밋이 먼저 들어간 경우(= fetch first) 대비
           for i in 1 2 3; do
-            echo "Push attempt $i"
-            git pull --rebase origin main || true
-            if git push origin HEAD:main; then
+            if git push; then
+              echo "Push succeeded"
               exit 0
             fi
-            sleep 2
+            echo "Push failed (attempt $i). Rebase and retry..."
+            git fetch origin main
+            git rebase origin/main
           done
 
           echo "Push failed after retries"
