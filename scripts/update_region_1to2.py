@@ -1,4 +1,3 @@
-
 import json
 import os
 import re
@@ -7,19 +6,34 @@ import datetime
 import requests
 from bs4 import BeautifulSoup
 
+# ✅ 출력 파일 (레포에 이미 있는 파일명과 동일하게)
 OUT = "data/region_1to2.json"
 
-# 동행복권 당첨판매점(회차별) 페이지
+# ✅ 회차별 당첨판매점(배출점) 페이지
+# 페이지 구조가 바뀔 수 있어서 파싱을 최대한 방어적으로 처리
 STORE_URL = "https://dhlottery.co.kr/store.do?method=topStore&drwNo={round}&pageGubun=L645"
-API_LATEST = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={round}"
+
+# ✅ 최신 회차 탐색용 공식 API
+API_ROUND = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={round}"
+
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-# ✅ 최근 몇 회 저장할지
+# ✅ 최근 N회(사용자 요구: 40회)
 WINDOW = 40
 
 SIDO_LIST = [
     "서울", "경기", "인천", "부산", "대구", "광주", "대전", "울산",
     "세종", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
+]
+
+# 주소(소재지)에서 시/도 식별에 쓰는 키워드
+SIDO_KEYWORDS = [
+    "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
+    "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
+    "서울특별시", "부산광역시", "대구광역시", "인천광역시", "광주광역시",
+    "대전광역시", "울산광역시", "세종특별자치시", "경기도", "강원도", "강원특별자치도",
+    "충청북도", "충청남도", "전라북도", "전북특별자치도", "전라남도",
+    "경상북도", "경상남도", "제주도", "제주특별자치도"
 ]
 
 def ensure_dirs():
@@ -30,36 +44,47 @@ def fetch_json(url: str) -> dict:
     r.raise_for_status()
     return r.json()
 
-def get_latest_round_guess(start: int = 1200, max_tries: int = 60) -> int:
+def load_existing() -> dict:
+    if not os.path.exists(OUT):
+        return {}
+    try:
+        with open(OUT, "r", encoding="utf-8") as f:
+            j = json.load(f)
+            return j if isinstance(j, dict) else {}
+    except Exception:
+        return {}
+
+def get_latest_round_guess(start: int = 1200, max_tries: int = 80) -> int:
     """
-    존재하는 최신 회차를 API로 탐색해서 찾음 (없는 회차는 returnValue != success)
+    존재하는 최신 회차를 API로 탐색해서 찾음.
+    start는 대략 최근 회차 근처로 두면 빠름.
     """
     cand = start
     for _ in range(max_tries):
-        js = fetch_json(API_LATEST.format(round=cand))
+        js = fetch_json(API_ROUND.format(round=cand))
         if js.get("returnValue") == "success" and js.get("drwNo") == cand:
-            js2 = fetch_json(API_LATEST.format(round=cand + 1))
+            js2 = fetch_json(API_ROUND.format(round=cand + 1))
             if js2.get("returnValue") == "success":
                 cand += 1
                 continue
             return cand
+        # 실패하면 뒤로
         cand -= 1
     raise RuntimeError("latestRound를 찾지 못했습니다. start 값을 조정하세요.")
 
 def sido_from_address(addr: str) -> str:
     """
-    판매점 '소재지'에서 시/도를 뽑음.
-    인터넷 판매(동행복권) 같은 케이스는 '인터넷'으로 분류.
+    판매점 소재지(주소) 문자열에서 시/도를 추출.
     """
     if not addr:
         return "기타"
 
-    if "동행복권" in addr or "dhlottery.co.kr" in addr or "인터넷" in addr:
-        return "인터넷"
-
     a = addr.strip()
 
-    # '서울특별시', '경기도' 등 대응
+    # 인터넷/동행복권 케이스
+    if "동행복권" in a or "dhlottery" in a or "인터넷" in a:
+        return "인터넷"
+
     mapping = {
         "서울특별시": "서울",
         "부산광역시": "부산",
@@ -82,41 +107,80 @@ def sido_from_address(addr: str) -> str:
         "제주특별자치도": "제주",
         "제주도": "제주",
     }
+
     for k, v in mapping.items():
         if a.startswith(k):
             return v
 
-    # 그냥 '서울', '경기'로 시작하는 경우
+    # 간단 시작 매칭
     for s in SIDO_LIST:
         if a.startswith(s):
+            return s
+
+    # 중간에라도 시/도 키워드가 들어 있으면 탐지 (예: "(서울) ..." 같은 형태)
+    for s in SIDO_LIST:
+        if s in a:
             return s
 
     return "기타"
 
 def find_rank_table(soup: BeautifulSoup, rank_text: str):
     """
-    '1등 배출점', '2등 배출점' 텍스트 근처의 table을 찾아 반환.
-    구조가 바뀌면 fallback으로 테이블 순서 사용.
+    '1등 배출점', '2등 배출점' 근처의 테이블을 찾음.
+    실패하면 tbl_data 테이블 순서로 fallback.
     """
     node = soup.find(string=re.compile(rank_text))
     if node:
-        tbl = node.find_parent().find_next("table")
-        if tbl:
-            return tbl
-    # fallback: tbl_data 테이블들
+        # node 기준으로 다음 table
+        parent = node.find_parent()
+        if parent:
+            tbl = parent.find_next("table")
+            if tbl:
+                return tbl
+
     tables = soup.select("table.tbl_data")
     if len(tables) >= 2:
         return tables[0] if "1등" in rank_text else tables[1]
-    # 마지막 fallback: 그냥 첫/둘째 table
+
+    # 최후 fallback
     tables2 = soup.find_all("table")
     if len(tables2) >= 2:
         return tables2[0] if "1등" in rank_text else tables2[1]
+
     return None
+
+def guess_address_from_tds(tds: list[str], addr_idx: int | None) -> str:
+    """
+    주소(td)를 robust하게 선택.
+    1) 헤더에서 찾은 addr_idx가 있으면 우선 사용
+    2) 아니면 td들 중 시/도 키워드/행정구역 패턴이 있는 값을 우선 선택
+    3) 그래도 없으면 마지막 td 또는 가장 긴 td fallback
+    """
+    if addr_idx is not None and 0 <= addr_idx < len(tds):
+        return tds[addr_idx]
+
+    # 시/도 키워드가 들어간 td 후보 우선
+    candidates = []
+    for t in tds:
+        if any(k in t for k in SIDO_KEYWORDS):
+            candidates.append(t)
+        elif re.search(r"(특별시|광역시|특별자치시|도|특별자치도)", t):
+            candidates.append(t)
+
+    if candidates:
+        # 후보가 여러 개면 가장 긴 텍스트를 주소로 간주
+        return max(candidates, key=len)
+
+    # 흔히 주소가 마지막 칼럼인 경우가 많음
+    if tds:
+        return tds[-1]
+
+    return ""
 
 def parse_table_to_counts(table) -> tuple[int, dict]:
     """
-    테이블에서 '소재지' 컬럼을 읽어 지역 카운트 집계.
-    반환: (총 row 수, bySido dict)
+    테이블에서 '소재지(주소)'를 읽어 지역 카운트 집계.
+    반환: (총 row 수, {"bySido":..., "internet":..., "other":...})
     """
     by = {s: 0 for s in SIDO_LIST}
     by_internet = 0
@@ -125,15 +189,23 @@ def parse_table_to_counts(table) -> tuple[int, dict]:
     if table is None:
         return 0, {"bySido": by, "internet": 0, "other": 0}
 
+    # 1) 헤더에서 "소재지/주소" 컬럼 인덱스 탐색
+    addr_idx = None
+    ths = [th.get_text(" ", strip=True) for th in table.select("thead th")]
+    for i, t in enumerate(ths):
+        if "소재지" in t or "주소" in t:
+            addr_idx = i
+            break
+
     rows = table.select("tbody tr") or table.select("tr")
     total = 0
+
     for tr in rows:
         tds = [td.get_text(" ", strip=True) for td in tr.select("td")]
         if not tds:
             continue
 
-        # 소재지는 보통 마지막/중간 컬럼에 존재. 가장 긴 텍스트를 소재지 후보로 사용.
-        addr = max(tds, key=len) if tds else ""
+        addr = guess_address_from_tds(tds, addr_idx)
         sido = sido_from_address(addr)
 
         total += 1
@@ -146,31 +218,11 @@ def parse_table_to_counts(table) -> tuple[int, dict]:
 
     return total, {"bySido": by, "internet": by_internet, "other": by_other}
 
-def load_existing():
-    if not os.path.exists(OUT):
-        return {}
-    try:
-        with open(OUT, "r", encoding="utf-8") as f:
-            j = json.load(f)
-            return j if isinstance(j, dict) else {}
-    except Exception:
-        return {}
-
-def prune_rounds(rounds: dict, start_round: int, latest_round: int) -> dict:
-    pruned = {}
-    for k, v in rounds.items():
-        if not isinstance(k, str) or not k.isdigit():
-            continue
-        rn = int(k)
-        if start_round <= rn <= latest_round:
-            pruned[k] = v
-    return pruned
-
 def fetch_round_region(round_no: int) -> dict:
     r = requests.get(STORE_URL.format(round=round_no), headers=HEADERS, timeout=25)
     r.raise_for_status()
 
-    # 인코딩 이슈 대비 (사이트가 EUC-KR로 내려주는 경우가 있음)
+    # 인코딩 이슈 대비
     if r.encoding is None or r.encoding.lower() == "iso-8859-1":
         r.encoding = r.apparent_encoding or "utf-8"
 
@@ -201,17 +253,33 @@ def main():
     ensure_dirs()
     existing = load_existing()
 
-    latest = get_latest_round_guess()
-    start = max(1, latest - WINDOW + 1)
+    # start 기준을 기존 파일 meta.latestRound로 잡으면 더 빨라짐
+    start_guess = 1200
+    try:
+        prev_latest = int((existing.get("meta", {}) or {}).get("latestRound", 0))
+        if prev_latest > 0:
+            start_guess = prev_latest
+    except Exception:
+        pass
+
+    latest = get_latest_round_guess(start=start_guess)
+    start_round = max(1, latest - WINDOW + 1)
 
     rounds = existing.get("rounds", {})
     if not isinstance(rounds, dict):
         rounds = {}
 
-    # 최근 WINDOW 범위 밖 제거
-    rounds = prune_rounds(rounds, start, latest)
+    # WINDOW 범위 밖 삭제
+    pruned = {}
+    for k, v in rounds.items():
+        if isinstance(k, str) and k.isdigit():
+            rn = int(k)
+            if start_round <= rn <= latest and isinstance(v, dict):
+                pruned[k] = v
+    rounds = pruned
 
-    for rnd in range(start, latest + 1):
+    # 필요한 회차만 채우기
+    for rnd in range(start_round, latest + 1):
         key = str(rnd)
         if key in rounds and isinstance(rounds[key], dict) and "rank1" in rounds[key] and "rank2" in rounds[key]:
             continue
@@ -235,3 +303,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
