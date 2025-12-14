@@ -13,9 +13,11 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -27,6 +29,22 @@ jobs:
 
       - name: Update heatmap JSON
         run: python scripts/update_heatmap.py
+
+      # ✅ 디버그: 실제로 파일이 생성/변경되는지 확인
+      - name: Debug - show generated files and git status
+        run: |
+          echo "=== ls data ==="
+          ls -la data || true
+          echo "=== heatmap.json (head) ==="
+          head -c 800 data/heatmap.json || true
+          echo
+          echo "=== prize_2to5.json (head) ==="
+          head -c 800 data/prize_2to5.json || true
+          echo
+          echo "=== git status ==="
+          git status --porcelain
+          echo "=== git diff (stat) ==="
+          git diff --stat
 
       - name: Commit & push if changed
         run: |
