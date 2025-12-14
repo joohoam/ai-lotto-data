@@ -8,20 +8,13 @@ from bs4 import BeautifulSoup
 
 OUT = "data/region_1to2.json"
 
-# 최신 회차 탐색용(공식 API)
+# 동행복권 배출점 페이지(회차별)
+STORE_URL = "https://dhlottery.co.kr/store.do?method=topStore&drwNo={round}&pageGubun=L645"
+HEADERS = {"User-Agent": "Mozilla/5.0"}
+
 API_ROUND = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={round}"
 
-# ✅ 지역 요약을 제공하는 페이지(안정적으로 region count만 뽑음)
-# (주소 테이블 파싱보다 실패율이 낮음)
-SOURCE_URL = "https://lottobomb.com/winning-region/index/{round}"
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0",
-    "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-}
-
-WINDOW = 40
+RANGE = 40  # ✅ 최근 40회
 
 SIDO_LIST = [
     "서울", "경기", "인천", "부산", "대구", "광주", "대전", "울산",
@@ -31,10 +24,27 @@ SIDO_LIST = [
 def ensure_dirs():
     os.makedirs("data", exist_ok=True)
 
+def now_kst_iso():
+    kst = datetime.timezone(datetime.timedelta(hours=9))
+    return datetime.datetime.now(kst).isoformat(timespec="seconds")
+
 def fetch_json(url: str) -> dict:
     r = requests.get(url, headers=HEADERS, timeout=20)
     r.raise_for_status()
     return r.json()
+
+def guess_latest(start: int = 1200, max_tries: int = 80) -> int:
+    cand = start
+    for _ in range(max_tries):
+        js = fetch_json(API_ROUND.format(round=cand))
+        if js.get("returnValue") == "success" and js.get("drwNo") == cand:
+            js2 = fetch_json(API_ROUND.format(round=cand + 1))
+            if js2.get("returnValue") == "success":
+                cand += 1
+                continue
+            return cand
+        cand -= 1
+    raise RuntimeError("latestRound 찾기 실패. start 조정 필요")
 
 def load_existing() -> dict:
     if not os.path.exists(OUT):
@@ -46,162 +56,200 @@ def load_existing() -> dict:
     except Exception:
         return {}
 
-def get_latest_round_guess(start: int = 1200, max_tries: int = 100) -> int:
-    """
-    존재하는 최신 회차를 공식 API로 탐색해서 찾음.
-    """
-    cand = start
-    for _ in range(max_tries):
-        js = fetch_json(API_ROUND.format(round=cand))
-        if js.get("returnValue") == "success" and js.get("drwNo") == cand:
-            js2 = fetch_json(API_ROUND.format(round=cand + 1))
-            if js2.get("returnValue") == "success":
-                cand += 1
-                continue
-            return cand
-        cand -= 1
-    raise RuntimeError("latestRound를 찾지 못했습니다. start 값을 조정하세요.")
+def sido_from_address(addr: str) -> str:
+    if not addr:
+        return "기타"
+    a = addr.strip()
 
-def _init_counts():
-    return {s: 0 for s in SIDO_LIST}
+    if "인터넷" in a or "동행복권" in a or "dhlottery" in a:
+        return "인터넷"
 
-def _parse_region_list_items(text: str) -> tuple[str, int] | None:
+    mapping = {
+        "서울특별시": "서울",
+        "부산광역시": "부산",
+        "대구광역시": "대구",
+        "인천광역시": "인천",
+        "광주광역시": "광주",
+        "대전광역시": "대전",
+        "울산광역시": "울산",
+        "세종특별자치시": "세종",
+        "경기도": "경기",
+        "강원특별자치도": "강원",
+        "강원도": "강원",
+        "충청북도": "충북",
+        "충청남도": "충남",
+        "전북특별자치도": "전북",
+        "전라북도": "전북",
+        "전라남도": "전남",
+        "경상북도": "경북",
+        "경상남도": "경남",
+        "제주특별자치도": "제주",
+        "제주도": "제주",
+    }
+
+    for k, v in mapping.items():
+        if a.startswith(k):
+            return v
+
+    for s in SIDO_LIST:
+        if a.startswith(s) or (s in a):
+            return s
+
+    return "기타"
+
+def find_rank_tables(soup: BeautifulSoup):
     """
-    예: '서울 3 개', '경기 18 개', '온라인 1 개'
+    페이지 내에서 1등/2등 테이블을 찾는다.
+    조건: thead/th 중 '소재지' 또는 '주소'가 포함된 테이블만 후보로 사용.
     """
-    t = re.sub(r"\s+", " ", (text or "").strip())
-    m = re.match(r"^(서울|경기|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주|온라인|인터넷)\s+(\d+)\s*개", t)
-    if not m:
+    candidates = []
+    for tbl in soup.find_all("table"):
+        ths = [th.get_text(" ", strip=True) for th in tbl.select("thead th")]
+        if any(("소재지" in t) or ("주소" in t) for t in ths):
+            candidates.append((tbl, ths))
+
+    # 등수 섹션 텍스트 근처의 테이블을 우선 찾기
+    def find_near(keyword: str):
+        node = soup.find(string=re.compile(keyword))
+        if not node:
+            return None
+        p = node.find_parent()
+        if not p:
+            return None
+        # keyword 이후 등장하는 테이블 중 후보만
+        for _ in range(6):
+            nxt = p.find_next("table")
+            if not nxt:
+                break
+            ths = [th.get_text(" ", strip=True) for th in nxt.select("thead th")]
+            if any(("소재지" in t) or ("주소" in t) for t in ths):
+                return nxt
+            p = nxt
         return None
-    return m.group(1), int(m.group(2))
 
-def _extract_rank_region_counts(html: str, rank: int) -> dict:
-    """
-    lottobomb 페이지에서 'N등 당첨 지역' 섹션의 bullet 리스트를 파싱.
-    결과는 rank1/rank2 구조에 맞춰 반환.
-    """
-    soup = BeautifulSoup(html, "lxml")
+    t1 = find_near("1등")
+    t2 = find_near("2등")
 
-    # 섹션 텍스트(예: "2등 당첨 지역")
-    pattern = re.compile(rf"{rank}\s*등\s*당첨\s*지역")
+    # fallback: 후보가 2개 이상이면 앞에서 2개를 rank1/rank2로 가정
+    if t1 is None or t2 is None:
+        if len(candidates) >= 2:
+            if t1 is None:
+                t1 = candidates[0][0]
+            if t2 is None:
+                t2 = candidates[1][0]
 
-    # 해당 텍스트를 포함하는 노드 찾기
-    node = soup.find(string=pattern)
-    if not node:
-        # 일부 페이지는 '로또 #### 회 2등 당첨 지역' 형태이므로 넓게 탐색
-        node = soup.find(string=re.compile(rf"로또.*{rank}\s*등\s*당첨\s*지역"))
-    if not node:
-        raise RuntimeError(f"rank{rank} 섹션을 찾지 못했습니다.")
+    return t1, t2
 
-    # node 이후에 나오는 ul/ol에서 li를 읽음
-    parent = node.find_parent()
-    lst = None
-    if parent:
-        lst = parent.find_next(["ul", "ol"])
-    if not lst:
-        raise RuntimeError(f"rank{rank} 리스트를 찾지 못했습니다.")
-
-    by_sido = _init_counts()
+def parse_table_to_counts(table) -> tuple[int, dict]:
+    by = {s: 0 for s in SIDO_LIST}
     internet = 0
     other = 0
     total = 0
 
-    for li in lst.find_all("li"):
-        item = li.get_text(" ", strip=True)
-        parsed = _parse_region_list_items(item)
-        if not parsed:
+    if table is None:
+        raise RuntimeError("테이블을 찾지 못함")
+
+    # 소재지 컬럼 인덱스 찾기
+    ths = [th.get_text(" ", strip=True) for th in table.select("thead th")]
+    addr_idx = None
+    for i, t in enumerate(ths):
+        if "소재지" in t or "주소" in t:
+            addr_idx = i
+            break
+    if addr_idx is None:
+        raise RuntimeError("소재지/주소 헤더를 찾지 못함")
+
+    rows = table.select("tbody tr")
+    if not rows:
+        raise RuntimeError("tbody tr 없음")
+
+    for tr in rows:
+        tds = [td.get_text(" ", strip=True) for td in tr.select("td")]
+        if not tds or addr_idx >= len(tds):
             continue
-        region, cnt = parsed
-        total += cnt
-        if region in by_sido:
-            by_sido[region] += cnt
-        elif region in ("온라인", "인터넷"):
-            internet += cnt
+        addr = tds[addr_idx]
+        sido = sido_from_address(addr)
+
+        total += 1
+        if sido in by:
+            by[sido] += 1
+        elif sido == "인터넷":
+            internet += 1
         else:
-            other += cnt
+            other += 1
 
-    return {
-        "totalStores": total,
-        "bySido": by_sido,
-        "internet": internet,
-        "other": other,
-    }
+    return total, {"bySido": by, "internet": internet, "other": other}
 
-def fetch_round_region(round_no: int) -> dict:
-    url = SOURCE_URL.format(round=round_no)
+def fetch_round_region(rnd: int) -> dict:
+    url = STORE_URL.format(round=rnd)
     r = requests.get(url, headers=HEADERS, timeout=25)
     r.raise_for_status()
 
-    # 인코딩 대비
     if r.encoding is None or r.encoding.lower() == "iso-8859-1":
         r.encoding = r.apparent_encoding or "utf-8"
 
     html = r.text
+    soup = BeautifulSoup(html, "lxml")
 
-    rank1 = _extract_rank_region_counts(html, 1)
-    rank2 = _extract_rank_region_counts(html, 2)
+    t1, t2 = find_rank_tables(soup)
+
+    total1, c1 = parse_table_to_counts(t1)
+    total2, c2 = parse_table_to_counts(t2)
+
+    # ✅ “전부 0 + other만 증가” 같은 경우는 파싱 실패로 간주하고 저장하지 않음
+    if total1 > 0 and sum(c1["bySido"].values()) == 0 and c1["other"] == total1:
+        raise RuntimeError(f"rank1 파싱 실패 의심(total={total1}, other={c1['other']})")
+    if total2 > 0 and sum(c2["bySido"].values()) == 0 and c2["other"] == total2:
+        raise RuntimeError(f"rank2 파싱 실패 의심(total={total2}, other={c2['other']})")
 
     return {
-        "rank1": rank1,
-        "rank2": rank2,
+        "rank1": {"totalStores": total1, **c1},
+        "rank2": {"totalStores": total2, **c2},
     }
 
 def main():
     ensure_dirs()
     existing = load_existing()
 
-    # 기존 meta.latestRound가 있으면 그 근처부터 탐색
+    # 시작점
     start_guess = 1200
     try:
-        prev_latest = int((existing.get("meta", {}) or {}).get("latestRound", 0))
-        if prev_latest > 0:
-            start_guess = prev_latest
+        start_guess = int((existing.get("meta", {}) or {}).get("latestRound", start_guess))
     except Exception:
         pass
 
-    latest = get_latest_round_guess(start=start_guess)
-    start_round = max(1, latest - WINDOW + 1)
+    latest = guess_latest(start=start_guess)
+    start_round = max(1, latest - RANGE + 1)
 
     rounds = existing.get("rounds", {})
     if not isinstance(rounds, dict):
         rounds = {}
 
-    # 윈도우 밖 데이터 제거
+    # 윈도우 밖 회차 삭제
     pruned = {}
     for k, v in rounds.items():
-        if isinstance(k, str) and k.isdigit():
+        if isinstance(k, str) and k.isdigit() and isinstance(v, dict):
             rn = int(k)
-            if start_round <= rn <= latest and isinstance(v, dict):
+            if start_round <= rn <= latest:
                 pruned[k] = v
     rounds = pruned
 
-    # 윈도우 범위 채우기(없거나 불완전하면 재생성)
     for rnd in range(start_round, latest + 1):
         key = str(rnd)
-        needs = True
-        if key in rounds and isinstance(rounds[key], dict):
-            if "rank1" in rounds[key] and "rank2" in rounds[key]:
-                r1 = rounds[key]["rank1"]
-                r2 = rounds[key]["rank2"]
-                # totalStores가 0이면 비정상으로 보고 재생성
-                if isinstance(r1, dict) and isinstance(r2, dict):
-                    if int(r1.get("totalStores", 0)) > 0 or int(r2.get("totalStores", 0)) > 0:
-                        needs = False
 
-        if not needs:
+        # 이미 값이 있으면 스킵(필요하면 force 로직 추가 가능)
+        if key in rounds and isinstance(rounds[key], dict) and "rank1" in rounds[key] and "rank2" in rounds[key]:
             continue
 
-        rounds[key] = fetch_round_region(rnd)
+        try:
+            rounds[key] = fetch_round_region(rnd)
+        except Exception as e:
+            # ✅ 실패하면 해당 회차는 기존 값이 있으면 유지, 없으면 그냥 건너뜀
+            print(f"[region] round {rnd} skipped: {e}")
         time.sleep(0.25)
 
-    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).isoformat(timespec="seconds")
-
     out = {
-        "meta": {
-            "latestRound": latest,
-            "range": WINDOW,
-            "updatedAt": now,
-        },
+        "meta": {"latestRound": latest, "range": RANGE, "updatedAt": now_kst_iso()},
         "rounds": {k: rounds[k] for k in sorted(rounds.keys(), key=lambda x: int(x))},
     }
 
