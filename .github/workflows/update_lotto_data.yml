@@ -1,16 +1,12 @@
-name: Update lotto data (heatmap + prize 2~5)
+name: Update lotto data (number heatmap + prize 2~5 + region 1~2)
 
 "on":
   workflow_dispatch:
   schedule:
-    - cron: "5 12 * * 6"    # 토 21:05 KST
-    - cron: "30 12 * * 6"   # 토 21:30 KST
-
-
-# ✅ 동시에 여러 번 실행되어도 "기존 실행을 취소"하지 않음 (취소 에러 방지)
-concurrency:
-  group: ai-lotto-data-update-main
-  cancel-in-progress: false
+    # KST 토 21:05 = UTC 토 12:05
+    - cron: "5 12 * * 6"
+    # KST 토 21:30 = UTC 토 12:30
+    - cron: "30 12 * * 6"
 
 permissions:
   contents: write
@@ -19,45 +15,41 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install deps
         run: pip install -r scripts/requirements.txt
 
+      - name: Update number heatmap JSON
+        run: python scripts/update_heatmap.py
+
       - name: Update prize 2~5 JSON
         run: python scripts/update_prize_2to5.py
 
-      - name: Update heatmap JSON
-        run: python scripts/update_heatmap.py
+      - name: Update region 1~2 JSON
+        run: python scripts/update_region_1to2.py
 
       - name: Debug - show generated files and git status
         run: |
           echo "=== ls data ==="
-          ls -la data || true
-          echo "=== heatmap.json (head) ==="
-          head -c 400 data/heatmap.json || true
-          echo
-          echo "=== prize_2to5.json (head) ==="
-          head -c 400 data/prize_2to5.json || true
-          echo
+          ls -al data || true
+          echo "=== head heatmap.json ==="
+          head -n 30 data/heatmap.json || true
+          echo "=== head prize_2to5.json ==="
+          head -n 30 data/prize_2to5.json || true
+          echo "=== head region_1to2.json ==="
+          head -n 50 data/region_1to2.json || true
           echo "=== git status ==="
-          git status --porcelain
+          git status
           echo "=== git diff (stat) ==="
-          git diff --stat
+          git diff --stat || true
 
-      - name: Commit & push if changed (with rebase + retry)
+      - name: Commit & push if changed (rebase + retry)
         run: |
-          set -e
-
           if git diff --quiet; then
             echo "No changes"
             exit 0
@@ -66,22 +58,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/heatmap.json data/prize_2to5.json
-          git commit -m "chore: update heatmap + prize 2~5" || echo "Nothing to commit"
+          git add data/heatmap.json data/prize_2to5.json data/region_1to2.json
+          git commit -m "chore: update number heatmap + prize 2~5 + region 1~2"
 
-          # ✅ fetch-first 충돌이 나면 rebase 후 재시도
-          for i in 1 2 3 4 5; do
-            echo "=== Push attempt $i ==="
-            git fetch origin main
-            git pull --rebase origin main
-
+          # push 충돌 방지: pull --rebase 후 재시도
+          for i in 1 2 3; do
+            git pull --rebase origin main || true
             if git push origin HEAD:main; then
-              echo "Push succeeded"
               exit 0
             fi
-
-            echo "Push failed, retrying..."
-            sleep 2
+            echo "Push failed, retry $i..."
+            sleep 3
           done
 
           echo "Push failed after retries"
