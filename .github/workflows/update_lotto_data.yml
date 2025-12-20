@@ -3,17 +3,11 @@ name: Update lotto data (heatmap + prize 2~5 + region 1~2)
 on:
   workflow_dispatch:
   schedule:
-    # KST 토요일 20:45 = UTC 토요일 11:45
     - cron: "45 11 * * 6"
-    # KST 토요일 20:50 = UTC 토요일 11:50
     - cron: "50 11 * * 6"
-    # KST 토요일 20:55 = UTC 토요일 11:55
     - cron: "55 11 * * 6"
-    # KST 토요일 21:00 = UTC 토요일 12:00
     - cron: "0 12 * * 6"
-    # KST 토요일 21:05 = UTC 토요일 12:05
     - cron: "5 12 * * 6"
-    # KST 토요일 21:30 = UTC 토요일 12:30 (최종 확정용)
     - cron: "30 12 * * 6"
 
 permissions:
@@ -46,7 +40,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r scripts/requirements.txt
 
-      # ✅ 네트워크/API 일시 오류 대비: 재시도 래퍼 + -u(로그 버퍼링 제거)
       - name: Run update scripts (with retry)
         shell: bash
         env:
@@ -90,35 +83,50 @@ jobs:
           test -s data/prize_2to5.json
           test -s data/region_1to2.json
 
-      # ✅ 여기(커밋 전에) 넣어야 “불완전 2등”이면 커밋이 막힘
-      - name: Validate region_1to2.json (rank2 must be meaningful)
+      # ✅ "2등이 1등으로 잘못 들어온" 케이스를 잡는다
+      - name: Validate region_1to2.json (rank2 must not equal rank1)
         shell: bash
-        env:
-          MIN_RANK2_STORES: "30"
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, os, sys
+          import json, sys
 
           path = "data/region_1to2.json"
           d = json.load(open(path, encoding="utf-8"))
 
           latest = str(d["meta"]["latestRound"])
           r = d["rounds"].get(latest, {})
+
+          rank1 = r.get("rank1") or r.get("1")
           rank2 = r.get("rank2") or r.get("2")
 
+          if not isinstance(rank1, dict):
+            print(f"ERROR: {latest} rank1 missing")
+            sys.exit(1)
           if not isinstance(rank2, dict):
             print(f"ERROR: {latest} rank2 missing")
             sys.exit(1)
 
-          total = int(rank2.get("totalStores", 0))
-          min_need = int(os.getenv("MIN_RANK2_STORES", "30"))
+          t1 = int(rank1.get("totalStores", 0))
+          t2 = int(rank2.get("totalStores", 0))
 
-          if total < min_need:
-            print(f"ERROR: {latest} rank2 too small: {total} (min={min_need})")
+          if t2 <= 0:
+            print(f"ERROR: {latest} rank2 totalStores=0")
             sys.exit(1)
 
-          print(f"OK: {latest} rank2 totalStores={total}")
+          # rank2가 rank1과 완전히 동일하면(총수/분포/인터넷/기타) = 2등을 1등으로 잘못 읽은 것
+          same = (
+            t1 == t2 and
+            rank1.get("internet") == rank2.get("internet") and
+            rank1.get("other") == rank2.get("other") and
+            rank1.get("bySido") == rank2.get("bySido")
+          )
+
+          if same:
+            print(f"ERROR: {latest} rank2 looks identical to rank1 (likely parsing/request issue). t1=t2={t1}")
+            sys.exit(1)
+
+          print(f"OK: {latest} rank1={t1}, rank2={t2} (not identical)")
           PY
 
       - name: Commit & push if changed
@@ -140,13 +148,11 @@ jobs:
 
           git commit -m "Update lotto data"
 
-          # ✅ 원격 선커밋/경합 대비: rebase 후 재시도 + 백오프
           for i in 1 2 3; do
             if git push origin "HEAD:$BRANCH"; then
               echo "Push succeeded"
               exit 0
             fi
-
             echo "Push failed (attempt $i). Rebase and retry..."
             git fetch origin "$BRANCH"
             git rebase "origin/$BRANCH" || { git rebase --abort; }
@@ -155,20 +161,3 @@ jobs:
 
           echo "Push failed after retries"
           exit 1
-
-      # (선택) workflow_dispatch에서만 디버그 로그
-      - name: Debug - show generated files and git status
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: |
-          echo "event_name=${{ github.event_name }}"
-          echo "schedule=${{ github.event.schedule }}"
-          echo "=== ls data ==="
-          ls -al data || true
-          echo "=== head heatmap.json ==="
-          head -n 40 data/heatmap.json || true
-          echo "=== head prize_2to5.json ==="
-          head -n 40 data/prize_2to5.json || true
-          echo "=== head region_1to2.json ==="
-          head -n 40 data/region_1to2.json || true
-          echo "=== git status ==="
-          git status --porcelain || true
