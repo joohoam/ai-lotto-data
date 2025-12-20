@@ -133,8 +133,10 @@ def parse_rows_from_table(tb) -> List[List[str]]:
         cells = [normalize_text(td.get_text(" ", strip=True)) for td in tds]
         headerish = " ".join(cells)
 
+        # 헤더 제거
         if ("상호" in headerish and ("소재지" in headerish or "주소" in headerish)):
             continue
+        # 조회 없음 제거
         if "조회" in headerish and "없" in headerish:
             continue
 
@@ -145,6 +147,9 @@ def parse_rows_from_table(tb) -> List[List[str]]:
 
 
 def find_store_table(soup: BeautifulSoup):
+    """
+    fallback: '상호/주소' 키워드 기반으로 그럴듯한 테이블 선택
+    """
     tables = soup.find_all("table")
     best = None
     best_score = -1.0
@@ -163,6 +168,33 @@ def find_store_table(soup: BeautifulSoup):
         if score > best_score:
             best_score = score
             best = tb
+
+    return best
+
+
+def find_rank_table(soup: BeautifulSoup, rank_no: int):
+    """
+    ✅ 핵심: '1등/2등' 라벨이 붙어있는 위치를 기준으로
+    바로 다음 table을 해당 등수 테이블로 선택.
+    (서버가 rankNo를 무시하거나 HTML에 테이블이 여러 개일 때도 안전)
+    """
+    rank = str(rank_no)
+    best = None
+    best_n = -1
+
+    for tag in soup.find_all(["h2", "h3", "h4", "h5", "strong", "p", "span", "div", "li", "a"]):
+        txt = normalize_text(tag.get_text(" ", strip=True))
+        if not txt:
+            continue
+
+        if (f"{rank}등" in txt or f"{rank} 등" in txt) and ("배출" in txt or "판매점" in txt or "당첨" in txt):
+            tb = tag.find_next("table")
+            if tb is None:
+                continue
+            n = len(tb.select("tbody tr")) or len(tb.find_all("tr"))
+            if n > best_n:
+                best_n = n
+                best = tb
 
     return best
 
@@ -187,12 +219,20 @@ def fetch_rank_page(session: requests.Session, round_no: int, rank_no: int, page
 
 
 def fetch_rank_rows(session: requests.Session, round_no: int, rank_no: int) -> List[List[str]]:
+    """
+    ✅ 등수 라벨 기반 테이블 선택(find_rank_table) → 실패 시 fallback(find_store_table)
+    ✅ nowPage 페이지네이션 + dedup으로 종료
+    """
     seen = set()
     all_rows: List[List[str]] = []
 
     for page in range(1, MAX_PAGES + 1):
         soup = fetch_rank_page(session, round_no, rank_no, page)
-        tb = find_store_table(soup)
+
+        tb = find_rank_table(soup, rank_no)
+        if tb is None:
+            tb = find_store_table(soup)
+
         rows = parse_rows_from_table(tb)
 
         new_cnt = 0
@@ -238,7 +278,7 @@ def tally(rows: List[List[str]]) -> Dict[str, Any]:
             other += 1
 
     return {
-        "totalStores": total,
+        "totalStores": total,   # row 수(=2등 winners와 맞추기 위한 엔트리 수)
         "bySido": by_sido,
         "internet": internet,
         "other": other,
