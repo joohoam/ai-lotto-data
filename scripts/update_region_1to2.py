@@ -70,7 +70,6 @@ def is_success_round(d: dict) -> bool:
 
 
 def get_latest_round_guess(session: requests.Session, max_tries: int = 80) -> int:
-    # 기존 파일의 latestRound 근처에서 탐색하면 더 빠름
     start = 1200
     if os.path.exists(OUT):
         try:
@@ -133,10 +132,8 @@ def parse_rows_from_table(tb) -> List[List[str]]:
         cells = [normalize_text(td.get_text(" ", strip=True)) for td in tds]
         headerish = " ".join(cells)
 
-        # 헤더 제거
         if ("상호" in headerish and ("소재지" in headerish or "주소" in headerish)):
             continue
-        # 조회 없음 제거
         if "조회" in headerish and "없" in headerish:
             continue
 
@@ -147,9 +144,6 @@ def parse_rows_from_table(tb) -> List[List[str]]:
 
 
 def find_store_table(soup: BeautifulSoup):
-    """
-    fallback: '상호/주소' 키워드 기반으로 그럴듯한 테이블 선택
-    """
     tables = soup.find_all("table")
     best = None
     best_score = -1.0
@@ -176,7 +170,6 @@ def find_rank_table(soup: BeautifulSoup, rank_no: int):
     """
     ✅ 핵심: '1등/2등' 라벨이 붙어있는 위치를 기준으로
     바로 다음 table을 해당 등수 테이블로 선택.
-    (서버가 rankNo를 무시하거나 HTML에 테이블이 여러 개일 때도 안전)
     """
     rank = str(rank_no)
     best = None
@@ -203,7 +196,7 @@ def fetch_rank_page(session: requests.Session, round_no: int, rank_no: int, page
     data = {
         "method": "topStore",
         "nowPage": str(page),
-        "rankNo": str(rank_no),   # ✅ 1/2 명시
+        "rankNo": str(rank_no),
         "rank": str(rank_no),
         "gameNo": "5133",
         "drwNo": str(round_no),
@@ -219,10 +212,6 @@ def fetch_rank_page(session: requests.Session, round_no: int, rank_no: int, page
 
 
 def fetch_rank_rows(session: requests.Session, round_no: int, rank_no: int) -> List[List[str]]:
-    """
-    ✅ 등수 라벨 기반 테이블 선택(find_rank_table) → 실패 시 fallback(find_store_table)
-    ✅ nowPage 페이지네이션 + dedup으로 종료
-    """
     seen = set()
     all_rows: List[List[str]] = []
 
@@ -290,7 +279,6 @@ def fetch_round_region(session: requests.Session, round_no: int) -> Dict[str, An
     r2_rows = fetch_rank_rows(session, round_no, 2)
 
     print(f"[region] round={round_no} r1_rows={len(r1_rows)} r2_rows={len(r2_rows)}")
-
     return {"rank1": tally(r1_rows), "rank2": tally(r2_rows)}
 
 
