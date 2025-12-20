@@ -3,11 +3,17 @@ name: Update lotto data (heatmap + prize 2~5 + region 1~2)
 on:
   workflow_dispatch:
   schedule:
+    # KST 토요일 20:45 = UTC 토요일 11:45
     - cron: "45 11 * * 6"
+    # KST 토요일 20:50 = UTC 토요일 11:50
     - cron: "50 11 * * 6"
+    # KST 토요일 20:55 = UTC 토요일 11:55
     - cron: "55 11 * * 6"
+    # KST 토요일 21:00 = UTC 토요일 12:00
     - cron: "0 12 * * 6"
+    # KST 토요일 21:05 = UTC 토요일 12:05
     - cron: "5 12 * * 6"
+    # KST 토요일 21:30 = UTC 토요일 12:30 (최종 확정용)
     - cron: "30 12 * * 6"
 
 permissions:
@@ -36,17 +42,19 @@ jobs:
           cache-dependency-path: scripts/requirements.txt
 
       - name: Install dependencies
+        shell: bash
         run: |
+          set -euo pipefail
           python -m pip install --upgrade pip
           pip install -r scripts/requirements.txt
 
-      - name: Run update scripts (with retry)
+      # ------------------------------------------------------------
+      # Retry helper
+      # ------------------------------------------------------------
+      - name: Define retry helper
         shell: bash
-        env:
-          PYTHONUNBUFFERED: "1"
         run: |
-          set -euo pipefail
-
+          cat <<'BASH' > /tmp/retry.sh
           retry () {
             local n=1
             local max=3
@@ -65,6 +73,18 @@ jobs:
               }
             done
           }
+          BASH
+
+      # ------------------------------------------------------------
+      # Heatmap + Prize
+      # ------------------------------------------------------------
+      - name: Run update_heatmap.py and update_prize_2to5.py (with retry)
+        shell: bash
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -euo pipefail
+          source /tmp/retry.sh
 
           echo "==> update_heatmap.py"
           retry python -u scripts/update_heatmap.py
@@ -72,9 +92,24 @@ jobs:
           echo "==> update_prize_2to5.py"
           retry python -u scripts/update_prize_2to5.py
 
-          echo "==> update_region_1to2.py"
+      # ------------------------------------------------------------
+      # Region 1~2 (✅ 여기서만 REGION_RANGE=40 적용)
+      # ------------------------------------------------------------
+      - name: Run update_region_1to2.py (with retry)
+        shell: bash
+        env:
+          PYTHONUNBUFFERED: "1"
+          REGION_RANGE: "40"
+        run: |
+          set -euo pipefail
+          source /tmp/retry.sh
+
+          echo "==> update_region_1to2.py (REGION_RANGE=$REGION_RANGE)"
           retry python -u scripts/update_region_1to2.py
 
+      # ------------------------------------------------------------
+      # Basic file validation
+      # ------------------------------------------------------------
       - name: Validate generated files (non-empty)
         shell: bash
         run: |
@@ -83,52 +118,52 @@ jobs:
           test -s data/prize_2to5.json
           test -s data/region_1to2.json
 
-      # ✅ "2등이 1등으로 잘못 들어온" 케이스를 잡는다
-      - name: Validate region_1to2.json (rank2 must not equal rank1)
+      # ------------------------------------------------------------
+      # Consistency check (latest round): region rank2 totalStores == prize rank2 winners
+      # ------------------------------------------------------------
+      - name: Validate latest round consistency (region rank2 == prize winners)
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           import json, sys
 
-          path = "data/region_1to2.json"
-          d = json.load(open(path, encoding="utf-8"))
+          prize = json.load(open("data/prize_2to5.json", encoding="utf-8"))
+          region = json.load(open("data/region_1to2.json", encoding="utf-8"))
 
-          latest = str(d["meta"]["latestRound"])
-          r = d["rounds"].get(latest, {})
+          latest = str(region["meta"]["latestRound"])
 
-          rank1 = r.get("rank1") or r.get("1")
-          rank2 = r.get("rank2") or r.get("2")
+          # prize 구조 2종 대응
+          if isinstance(prize.get("rounds"), dict):
+            p_round = prize["rounds"].get(latest, {})
+          else:
+            p_round = prize.get(latest, {})
 
-          if not isinstance(rank1, dict):
-            print(f"ERROR: {latest} rank1 missing")
-            sys.exit(1)
-          if not isinstance(rank2, dict):
-            print(f"ERROR: {latest} rank2 missing")
-            sys.exit(1)
-
-          t1 = int(rank1.get("totalStores", 0))
-          t2 = int(rank2.get("totalStores", 0))
-
-          if t2 <= 0:
-            print(f"ERROR: {latest} rank2 totalStores=0")
+          p2 = p_round.get("2") or p_round.get(2)
+          if not isinstance(p2, dict) or "winners" not in p2:
+            print(f"ERROR: prize_2to5.json missing round {latest} rank2 winners")
             sys.exit(1)
 
-          # rank2가 rank1과 완전히 동일하면(총수/분포/인터넷/기타) = 2등을 1등으로 잘못 읽은 것
-          same = (
-            t1 == t2 and
-            rank1.get("internet") == rank2.get("internet") and
-            rank1.get("other") == rank2.get("other") and
-            rank1.get("bySido") == rank2.get("bySido")
-          )
+          expected = int(p2["winners"])
 
-          if same:
-            print(f"ERROR: {latest} rank2 looks identical to rank1 (likely parsing/request issue). t1=t2={t1}")
+          r_round = region.get("rounds", {}).get(latest, {})
+          r2 = r_round.get("rank2") or r_round.get("2")
+          if not isinstance(r2, dict):
+            print(f"ERROR: region_1to2.json missing round {latest} rank2")
             sys.exit(1)
 
-          print(f"OK: {latest} rank1={t1}, rank2={t2} (not identical)")
+          got = int(r2.get("totalStores", 0))
+
+          if got != expected:
+            print(f"ERROR: latest {latest} mismatch. region rank2 totalStores={got}, prize winners={expected}")
+            sys.exit(1)
+
+          print(f"OK: latest {latest} rank2 totalStores={got} matches prize winners={expected}")
           PY
 
+      # ------------------------------------------------------------
+      # Commit & Push
+      # ------------------------------------------------------------
       - name: Commit & push if changed
         shell: bash
         env:
@@ -153,6 +188,7 @@ jobs:
               echo "Push succeeded"
               exit 0
             fi
+
             echo "Push failed (attempt $i). Rebase and retry..."
             git fetch origin "$BRANCH"
             git rebase "origin/$BRANCH" || { git rebase --abort; }
@@ -161,3 +197,20 @@ jobs:
 
           echo "Push failed after retries"
           exit 1
+
+      # ------------------------------------------------------------
+      # Optional debug on manual runs
+      # ------------------------------------------------------------
+      - name: Debug - show meta and status
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== region meta ==="
+          python - <<'PY'
+          import json
+          d=json.load(open("data/region_1to2.json", encoding="utf-8"))
+          print(d.get("meta", {}))
+          PY
+          echo "=== git status ==="
+          git status --porcelain || true
