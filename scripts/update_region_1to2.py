@@ -10,7 +10,6 @@ from bs4 import BeautifulSoup
 
 OUT = "data/region_1to2.json"
 
-# ✅ topStore는 "페이지 URL + POST 바디" 조합이 표준적으로 잘 동작함
 POST_URL = "https://dhlottery.co.kr/store.do?method=topStore&pageGubun=L645"
 API_ROUND = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={round}"
 
@@ -20,9 +19,8 @@ HEADERS = {
     "Referer": "https://dhlottery.co.kr/",
 }
 
-# 운영 파라미터(필요 시 Actions env로 조절)
 RANGE = int(os.getenv("REGION_RANGE", "5"))
-MAX_PAGES = int(os.getenv("REGION_MAX_PAGES", "200"))   # 2등 많을 때 대비
+MAX_PAGES = int(os.getenv("REGION_MAX_PAGES", "200"))
 SLEEP_PER_PAGE = float(os.getenv("REGION_SLEEP_PER_PAGE", "0.12"))
 TIMEOUT = int(os.getenv("REGION_TIMEOUT", "25"))
 
@@ -106,30 +104,6 @@ def extract_address_from_row_cells(cells: list[str]) -> Optional[str]:
     return None
 
 
-def find_store_table(soup: BeautifulSoup):
-    """
-    rankNo/nowPage로 호출한 응답에는 보통 '당첨 판매점' 테이블 1개가 중심.
-    헤더에 '상호' + '소재지/주소'가 있는 테이블을 우선 선택.
-    """
-    tables = soup.find_all("table")
-    best = None
-    best_score = -1.0
-    for tb in tables:
-        txt = normalize_text(tb.get_text(" ", strip=True))
-        score = 0.0
-        if "상호" in txt:
-            score += 2
-        if "소재지" in txt or "주소" in txt:
-            score += 2
-        if "번호선택구분" in txt or "구분" in txt:
-            score += 1
-        score += min(len(tb.find_all("tr")), 30) * 0.05
-        if score > best_score:
-            best_score = score
-            best = tb
-    return best
-
-
 def parse_rows_from_table(tb) -> list[list[str]]:
     if tb is None:
         return []
@@ -140,38 +114,51 @@ def parse_rows_from_table(tb) -> list[list[str]]:
             continue
         cells = [normalize_text(td.get_text(" ", strip=True)) for td in tds]
         headerish = " ".join(cells)
-
-        # 헤더/빈 결과 제거
         if ("상호" in headerish and ("소재지" in headerish or "주소" in headerish)):
             continue
         if "조회" in headerish and "없" in headerish:
             continue
-
-        # 실제 데이터 row는 보통 3~4컬럼 이상
         if len(cells) >= 3:
             rows.append(cells)
     return rows
 
 
-def extract_max_page(soup: BeautifulSoup) -> int:
+def find_rank_table(soup: BeautifulSoup, rank_no: int):
     """
-    페이지 하단의 페이징 영역에서 최대 페이지를 추정.
-    goPage('N') 형태가 흔함.
-    못 찾으면 1.
+    ✅ 응답 HTML 안에서 '1등'/'2등' 라벨이 붙은 섹션을 찾아,
+    그 바로 다음 table을 해당 등수 테이블로 선택한다.
+    (서버가 rankNo를 무시해도, HTML에 둘 다 있으면 정확히 분리 가능)
     """
-    html = str(soup)
-    nums = [int(x) for x in re.findall(r"goPage\(['\"]?(\d+)['\"]?\)", html)]
-    return max(nums) if nums else 1
+    rank = str(rank_no)
+    best = None
+    best_n = -1
+
+    for tag in soup.find_all(["h2", "h3", "h4", "h5", "strong", "p", "span", "div", "li", "a"]):
+        txt = normalize_text(tag.get_text(" ", strip=True))
+        if not txt:
+            continue
+
+        # 조건을 넓게 잡음: "1등/2등" + "배출/판매점/당첨" 중 하나만 있어도 인정
+        if (f"{rank}등" in txt or f"{rank} 등" in txt) and ("배출" in txt or "판매점" in txt or "당첨" in txt):
+            tb = tag.find_next("table")
+            if tb is None:
+                continue
+            n = len(tb.select("tbody tr")) or len(tb.find_all("tr"))
+            if n > best_n:
+                best_n = n
+                best = tb
+
+    return best
 
 
 def fetch_rank_page(session: requests.Session, round_no: int, rank_no: int, page: int) -> BeautifulSoup:
-    # 1등은 rankNo 빈값, 2등은 '2'
-    rank_val = "" if rank_no == 1 else str(rank_no)
-
+    # ✅ 핵심: rankNo를 빈값이 아니라 '1'/'2'로 명시
+    # (최근/일부 회차에서 빈값/2가 무시되는 케이스 방지)
     data = {
         "method": "topStore",
         "nowPage": str(page),
-        "rankNo": rank_val,
+        "rankNo": str(rank_no),     # <- 여기!
+        "rank": str(rank_no),       # <- 서버/스크립트가 rank를 쓰는 경우 대비
         "gameNo": "5133",
         "drwNo": str(round_no),
         "schKey": "all",
@@ -187,17 +174,22 @@ def fetch_rank_page(session: requests.Session, round_no: int, rank_no: int, page
 
 def fetch_rank_rows(session: requests.Session, round_no: int, rank_no: int) -> list[list[str]]:
     """
-    ✅ nowPage를 1..N 돌면서 row를 누적.
-    (서버가 nowPage를 무시해서 매번 1페이지를 주면, dedup + maxPage로 잡아냄)
+    ✅ nowPage를 1..N 돌면서 row 누적 (페이지가 안 넘어가면 dedup로 멈춤)
+    ✅ 테이블 선택은 등수 라벨 기반(find_rank_table) 우선
     """
-    all_rows: list[list[str]] = []
     seen = set()
+    all_rows: list[list[str]] = []
 
-    first = fetch_rank_page(session, round_no, rank_no, 1)
-    max_page = min(extract_max_page(first), MAX_PAGES)
+    for page in range(1, MAX_PAGES + 1):
+        soup = fetch_rank_page(session, round_no, rank_no, page)
 
-    def consume(soup: BeautifulSoup) -> int:
-        tb = find_store_table(soup)
+        # rank 라벨 기반 테이블 우선, 없으면 첫 table 중 그럴듯한 것 사용
+        tb = find_rank_table(soup, rank_no)
+        if tb is None:
+            # fallback: 첫 번째로 큰 table
+            tables = soup.find_all("table")
+            tb = tables[0] if tables else None
+
         rows = parse_rows_from_table(tb)
         new_cnt = 0
         for cells in rows:
@@ -207,17 +199,7 @@ def fetch_rank_rows(session: requests.Session, round_no: int, rank_no: int) -> l
             seen.add(key)
             all_rows.append(cells)
             new_cnt += 1
-        return new_cnt
 
-    consume(first)
-
-    for p in range(2, max_page + 1):
-        soup = fetch_rank_page(session, round_no, rank_no, p)
-        new_cnt = consume(soup)
-
-        # 페이지를 넘겼는데 신규 row가 0이면:
-        # - 마지막 페이지에 도달했거나
-        # - 서버가 nowPage를 무시하고 같은 페이지를 주는 상황
         if new_cnt == 0:
             break
 
@@ -265,10 +247,7 @@ def fetch_round_region(session: requests.Session, round_no: int) -> dict:
 
     print(f"[region] round={round_no} r1_rows={len(r1_rows)} r2_rows={len(r2_rows)}")
 
-    return {
-        "rank1": tally(r1_rows),
-        "rank2": tally(r2_rows),
-    }
+    return {"rank1": tally(r1_rows), "rank2": tally(r2_rows)}
 
 
 def main():
@@ -296,11 +275,7 @@ def main():
         time.sleep(0.2)
 
     out = {
-        "meta": {
-            "latestRound": latest,
-            "range": RANGE,
-            "updatedAt": now_kst_iso(),
-        },
+        "meta": {"latestRound": latest, "range": RANGE, "updatedAt": now_kst_iso()},
         "rounds": rounds_obj,
     }
 
