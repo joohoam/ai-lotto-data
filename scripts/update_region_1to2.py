@@ -10,10 +10,10 @@ from bs4 import BeautifulSoup
 
 OUT = "data/region_1to2.json"
 
-# ✅ topStore 엔드포인트 (pageGubun은 쿼리로 고정)
-TOPSTORE_URL = "https://dhlottery.co.kr/store.do?method=topStore&pageGubun=L645"
+# ✅ 회차별 배출점 페이지 (HTML 내에 1등/2등 섹션이 같이 있는 경우가 많음)
+STORE_URL = "https://dhlottery.co.kr/store.do?method=topStore&drwNo={round}&pageGubun=L645"
 
-# 최신 회차 확인용 API (회차 존재 여부 체크)
+# 최신 회차 확인용 API
 API_ROUND = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={round}"
 
 HEADERS = {
@@ -22,17 +22,14 @@ HEADERS = {
     "Referer": "https://dhlottery.co.kr/",
 }
 
-# ✅ 운영 파라미터 (필요하면 Actions env로 조정 가능)
-RANGE = int(os.getenv("REGION_RANGE", "5"))  # 기본 5회만 갱신 (속도/안정)
-MAX_PAGES = int(os.getenv("REGION_MAX_PAGES", "80"))
-SLEEP_PER_PAGE = float(os.getenv("REGION_SLEEP_PER_PAGE", "0.15"))
+# ✅ 운영 파라미터(필요시 Actions env로 조정 가능)
+RANGE = int(os.getenv("REGION_RANGE", "5"))  # 기본 5회만 갱신
 TIMEOUT = int(os.getenv("REGION_TIMEOUT", "25"))
 
 SIDO_LIST = [
     "서울", "경기", "인천", "부산", "대구", "광주", "대전", "울산",
     "세종", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
 ]
-
 SIDO_RE = re.compile(r"^(서울|경기|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주)\b")
 
 
@@ -43,6 +40,10 @@ def ensure_dirs():
 def now_kst_iso():
     kst = timezone(timedelta(hours=9))
     return datetime.now(tz=kst).isoformat(timespec="seconds")
+
+
+def normalize_text(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip())
 
 
 def fetch_json(session: requests.Session, url: str, timeout=20) -> dict:
@@ -56,10 +57,6 @@ def is_success_round(d: dict) -> bool:
 
 
 def get_latest_round_guess(session: requests.Session, max_tries: int = 80) -> int:
-    """
-    1) 기존 파일 meta.latestRound가 있으면 그 근처에서 탐색
-    2) getLottoNumber API로 존재여부를 확인하면서 최신회차를 찾음
-    """
     start = 1200
     if os.path.exists(OUT):
         try:
@@ -82,11 +79,16 @@ def get_latest_round_guess(session: requests.Session, max_tries: int = 80) -> in
         cand -= 1
         time.sleep(0.12)
 
-    raise RuntimeError("latestRound를 찾지 못했습니다. start 값을 조정해 주세요.")
+    raise RuntimeError("latestRound를 찾지 못했습니다.")
 
 
-def normalize_text(s: str) -> str:
-    return re.sub(r"\s+", " ", (s or "").strip())
+def fetch_round_html(session: requests.Session, round_no: int) -> BeautifulSoup:
+    url = STORE_URL.format(round=round_no)
+    r = session.get(url, headers=HEADERS, timeout=TIMEOUT)
+    r.raise_for_status()
+    if not r.encoding or r.encoding.lower() in ("iso-8859-1", "ascii"):
+        r.encoding = r.apparent_encoding
+    return BeautifulSoup(r.text, "lxml")
 
 
 def detect_sido(addr: str) -> Optional[str]:
@@ -100,12 +102,10 @@ def detect_sido(addr: str) -> Optional[str]:
 def extract_address_from_row_cells(cells: list[str]) -> Optional[str]:
     texts = [normalize_text(c) for c in cells if normalize_text(c)]
 
-    # 1) 셀 단위에서 '시/도'로 시작하는 주소 후보
     for t in texts:
         if detect_sido(t):
             return t
 
-    # 2) row 전체를 합쳐서 주소 패턴을 잡아보기
     joined = " | ".join(texts)
     m = re.search(
         r"(서울|경기|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주)\s+[^|]+",
@@ -113,55 +113,14 @@ def extract_address_from_row_cells(cells: list[str]) -> Optional[str]:
     )
     if m:
         return normalize_text(m.group(0))
-
     return None
-
-
-def fetch_html_post(session: requests.Session, data: dict) -> str:
-    """
-    ✅ rankNo/nowPage를 안정적으로 적용하기 위해 POST + form-data로 조회
-    """
-    r = session.post(TOPSTORE_URL, headers=HEADERS, data=data, timeout=TIMEOUT)
-    r.raise_for_status()
-    if not r.encoding or r.encoding.lower() in ("iso-8859-1", "ascii"):
-        r.encoding = r.apparent_encoding
-    return r.text
-
-
-def find_store_table(soup: BeautifulSoup):
-    """
-    페이지 내 여러 table 중 '당첨 판매점' 목록 테이블을 찾는다.
-    (헤더에 '상호' + '소재지/주소'가 있는 테이블 우선)
-    """
-    tables = soup.find_all("table")
-    best = None
-    best_score = -1
-
-    for tb in tables:
-        header_text = normalize_text(tb.get_text(" ", strip=True))
-        score = 0
-        if "상호" in header_text:
-            score += 2
-        if "소재지" in header_text or "주소" in header_text:
-            score += 2
-        if "번호선택구분" in header_text or "구분" in header_text:
-            score += 1
-
-        trs = tb.find_all("tr")
-        score += min(len(trs), 30) * 0.05
-
-        if score > best_score:
-            best_score = score
-            best = tb
-
-    return best
 
 
 def parse_rows_from_table(tb) -> list[list[str]]:
     if tb is None:
         return []
 
-    rows = []
+    rows: list[list[str]] = []
     for tr in tb.find_all("tr"):
         tds = tr.find_all(["td", "th"])
         if not tds:
@@ -172,9 +131,8 @@ def parse_rows_from_table(tb) -> list[list[str]]:
         # 헤더 제거
         if ("상호" in headerish and ("소재지" in headerish or "주소" in headerish)):
             continue
-
-        # 조회 없음 문구 제거
-        if "조회된" in headerish and "없" in headerish:
+        # "조회된 내역이 없습니다" 제거
+        if "조회" in headerish and "없" in headerish:
             continue
 
         if len(cells) >= 3:
@@ -183,46 +141,79 @@ def parse_rows_from_table(tb) -> list[list[str]]:
     return rows
 
 
-def fetch_rank_rows(session: requests.Session, round_no: int, rank_no: int) -> list[list[str]]:
+def find_rank_table(soup: BeautifulSoup, rank_no: int):
     """
-    ✅ rankNo(1/2) + nowPage(1..N)을 돌면서 모든 row를 누적한다.
-    중복 방지 위해 row 문자열 키로 dedup.
+    ✅ HTML 안에서 "1등/2등 ... 배출/판매점/당첨" 같은 라벨이 있는 섹션을 찾고,
+    그 다음에 나오는 table을 해당 등수 테이블로 간주.
+    (rankNo 파라미터가 무시되어도 이 방식은 동작)
     """
-    seen = set()
-    all_rows: list[list[str]] = []
+    rank = str(rank_no)
+    candidates = []
 
-    for page in range(1, MAX_PAGES + 1):
-        html = fetch_html_post(
-            session,
-            {
-                "drwNo": str(round_no),
-                "rankNo": str(rank_no),
-                "nowPage": str(page),
-                # 아래 키들은 없어도 되는 경우가 많지만, 페이지에 따라 요구될 수 있어 같이 보냄
-                "pageGubun": "L645",
-                "method": "topStore",
-            },
-        )
-        soup = BeautifulSoup(html, "lxml")
-        tb = find_store_table(soup)
+    # 라벨 후보 태그들
+    for tag in soup.find_all(["h2", "h3", "h4", "h5", "strong", "p", "span", "div", "li", "a"]):
+        txt = normalize_text(tag.get_text(" ", strip=True))
+        if not txt:
+            continue
+
+        # "1등", "2등" 포함 + 배출/판매점/당첨 같은 키워드
+        if (f"{rank}등" in txt or f"{rank} 등" in txt) and ("배출" in txt or "판매점" in txt or "당첨" in txt):
+            tb = tag.find_next("table")
+            if tb is not None:
+                candidates.append(tb)
+
+    # 후보가 여러 개면 데이터 row가 많은 테이블을 선택
+    best = None
+    best_n = -1
+    for tb in candidates:
+        n = len(tb.select("tbody tr")) or len(tb.find_all("tr"))
+        if n > best_n:
+            best_n = n
+            best = tb
+
+    return best
+
+
+def parse_rank_tables_fallback(soup: BeautifulSoup):
+    """
+    마지막 보험: 테이블을 여러 개 스캔해서 주소 히트가 나는 테이블 2개를 뽑음
+    """
+    tables = soup.find_all("table")
+    candidate = []
+
+    for tb in tables:
+        trs = tb.find_all("tr")
+        if len(trs) < 2:
+            continue
+        context = normalize_text(tb.get_text(" ", strip=True))
+        score = 0
+        if "소재지" in context or "주소" in context:
+            score += 2
+        if "상호" in context:
+            score += 1
+        candidate.append((score, tb))
+
+    candidate.sort(key=lambda x: x[0], reverse=True)
+    top = [tb for _, tb in candidate[:8]]
+
+    parsed = []
+    for tb in top:
         rows = parse_rows_from_table(tb)
 
-        new_cnt = 0
-        for cells in rows:
-            key = "|".join(cells)
-            if key in seen:
-                continue
-            seen.add(key)
-            all_rows.append(cells)
-            new_cnt += 1
+        # 주소 히트가 최소 1개라도 있어야 채택
+        hits = 0
+        for cells in rows[:15]:
+            addr = extract_address_from_row_cells(cells)
+            if detect_sido(addr or ""):
+                hits += 1
+        if hits >= 1:
+            parsed.append(rows)
 
-        # 더 이상 신규 row가 없으면 종료
-        if new_cnt == 0:
-            break
-
-        time.sleep(SLEEP_PER_PAGE)
-
-    return all_rows
+    if len(parsed) >= 2:
+        return parsed[0], parsed[1]
+    if len(parsed) == 1:
+        return parsed[0], []
+    return [], []
 
 
 def tally(rows: list[list[str]]):
@@ -236,7 +227,6 @@ def tally(rows: list[list[str]]):
         if not joined:
             continue
 
-        # 인터넷/동행복권(온라인) 감지
         if "인터넷" in joined or "동행복권" in joined or "dhlottery" in joined:
             internet += 1
             total += 1
@@ -260,20 +250,29 @@ def tally(rows: list[list[str]]):
 
 
 def fetch_round_region(session: requests.Session, round_no: int) -> dict:
-    r1_rows = fetch_rank_rows(session, round_no, 1)
-    r2_rows = fetch_rank_rows(session, round_no, 2)
+    soup = fetch_round_html(session, round_no)
+
+    tb1 = find_rank_table(soup, 1)
+    tb2 = find_rank_table(soup, 2)
+
+    r1_rows = parse_rows_from_table(tb1) if tb1 else []
+    r2_rows = parse_rows_from_table(tb2) if tb2 else []
+
+    # fallback (라벨 기반 탐지가 실패한 경우)
+    if not r1_rows or not r2_rows:
+        fb1, fb2 = parse_rank_tables_fallback(soup)
+        if not r1_rows:
+            r1_rows = fb1
+        if not r2_rows:
+            r2_rows = fb2
 
     print(f"[region] round={round_no} r1_rows={len(r1_rows)} r2_rows={len(r2_rows)}")
 
-    rank1 = tally(r1_rows)
-    rank2 = tally(r2_rows)
-
-    return {"rank1": rank1, "rank2": rank2}
+    return {"rank1": tally(r1_rows), "rank2": tally(r2_rows)}
 
 
 def main():
     ensure_dirs()
-
     session = requests.Session()
 
     latest = get_latest_round_guess(session)
@@ -289,20 +288,15 @@ def main():
         except Exception:
             rounds_obj = {}
 
-    # ✅ 최근 RANGE 회만 갱신 (그 외는 유지)
     for rnd in range(start_round, latest + 1):
         try:
             rounds_obj[str(rnd)] = fetch_round_region(session, rnd)
         except Exception as e:
             print(f"[region] ERROR round={rnd}: {e}")
-        time.sleep(0.25)
+        time.sleep(0.15)
 
     out = {
-        "meta": {
-            "latestRound": latest,
-            "range": RANGE,
-            "updatedAt": now_kst_iso(),
-        },
+        "meta": {"latestRound": latest, "range": RANGE, "updatedAt": now_kst_iso()},
         "rounds": rounds_obj,
     }
 
