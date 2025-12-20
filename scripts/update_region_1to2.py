@@ -3,7 +3,7 @@ import os
 import re
 import time
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any
 
 import requests
 from bs4 import BeautifulSoup
@@ -19,24 +19,13 @@ HEADERS = {
     "Referer": "https://dhlottery.co.kr/",
 }
 
-# =========================
-# 운영 파라미터 (env)
-# =========================
-# 파일에 유지할 최신 회차 개수(윈도우)
-WINDOW = int(os.getenv("REGION_WINDOW", "40"))
+# ✅ 매번 최신 N회 전체 재수집
+RANGE = int(os.getenv("REGION_RANGE", "40"))
 
-# 매 실행 시 "무조건" 다시 갱신할 최신 회차 개수(당일 업데이트 흔들림 방지)
-REFRESH = int(os.getenv("REGION_REFRESH", "2"))
-
-# 초기 파일이 비어 있을 때: WINDOW 회차를 한 번에 구축할지
-BOOTSTRAP_ON_EMPTY = os.getenv("REGION_BOOTSTRAP_ON_EMPTY", "1") == "1"
-
-# 스크래핑 튜닝
 MAX_PAGES = int(os.getenv("REGION_MAX_PAGES", "220"))
 SLEEP_PER_PAGE = float(os.getenv("REGION_SLEEP_PER_PAGE", "0.12"))
 TIMEOUT = int(os.getenv("REGION_TIMEOUT", "25"))
 
-# 파일 표시: 최신회차가 위로 오도록 정렬
 SORT_DESC = os.getenv("REGION_SORT_DESC", "1") == "1"
 
 SIDO_LIST = [
@@ -69,7 +58,8 @@ def is_success_round(d: dict) -> bool:
     return (d.get("returnValue") == "success") and isinstance(d.get("drwNo"), int) and d.get("drwNo", 0) > 0
 
 
-def get_latest_round_guess(session: requests.Session, max_tries: int = 80) -> int:
+def get_latest_round_guess(session: requests.Session, max_tries: int = 120) -> int:
+    # 대략적인 시작점 (있으면 파일 meta로 가속)
     start = 1200
     if os.path.exists(OUT):
         try:
@@ -168,8 +158,7 @@ def find_store_table(soup: BeautifulSoup):
 
 def find_rank_table(soup: BeautifulSoup, rank_no: int):
     """
-    ✅ 핵심: '1등/2등' 라벨이 붙어있는 위치를 기준으로
-    바로 다음 table을 해당 등수 테이블로 선택.
+    ✅ '1등/2등' 라벨이 붙은 섹션을 기준으로 table 선택
     """
     rank = str(rank_no)
     best = None
@@ -267,7 +256,7 @@ def tally(rows: List[List[str]]) -> Dict[str, Any]:
             other += 1
 
     return {
-        "totalStores": total,   # row 수(=2등 winners와 맞추기 위한 엔트리 수)
+        "totalStores": total,
         "bySido": by_sido,
         "internet": internet,
         "other": other,
@@ -282,84 +271,30 @@ def fetch_round_region(session: requests.Session, round_no: int) -> Dict[str, An
     return {"rank1": tally(r1_rows), "rank2": tally(r2_rows)}
 
 
-def load_existing() -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    if not os.path.exists(OUT):
-        return {}, {}
-    try:
-        with open(OUT, "r", encoding="utf-8") as f:
-            d = json.load(f) or {}
-        meta = d.get("meta", {}) if isinstance(d.get("meta"), dict) else {}
-        rounds = d.get("rounds", {}) if isinstance(d.get("rounds"), dict) else {}
-        return meta, rounds
-    except Exception:
-        return {}, {}
-
-
-def sort_rounds(rounds_obj: Dict[str, Any]) -> Dict[str, Any]:
-    keys = sorted(rounds_obj.keys(), key=lambda x: int(x), reverse=SORT_DESC)
-    return {k: rounds_obj[k] for k in keys}
-
-
-def trim_window(rounds_obj: Dict[str, Any], latest: int) -> Dict[str, Any]:
-    start = max(1, latest - (WINDOW - 1))
-    keep = {}
-    for r in range(start, latest + 1):
-        k = str(r)
-        if k in rounds_obj:
-            keep[k] = rounds_obj[k]
-    return sort_rounds(keep)
-
-
-def compute_targets(latest: int, rounds_obj: Dict[str, Any]) -> List[int]:
-    start = max(1, latest - (WINDOW - 1))
-    existing = {int(k) for k in rounds_obj.keys() if str(k).isdigit()}
-    targets = set()
-
-    if not existing:
-        if BOOTSTRAP_ON_EMPTY:
-            targets.update(range(start, latest + 1))
-        else:
-            targets.add(latest)
-        return sorted(targets)
-
-    # 최신 WINDOW 범위에서 누락된 회차 채우기
-    for r in range(start, latest + 1):
-        if r not in existing:
-            targets.add(r)
-
-    # 최신 REFRESH 회차는 항상 재수집
-    refresh_start = max(start, latest - (max(REFRESH, 1) - 1))
-    for r in range(refresh_start, latest + 1):
-        targets.add(r)
-
-    return sorted(targets)
-
-
 def main():
     ensure_dirs()
     session = requests.Session()
 
     latest = get_latest_round_guess(session)
-    _, rounds_obj = load_existing()
+    start_round = max(1, latest - (RANGE - 1))
 
-    targets = compute_targets(latest, rounds_obj)
+    rounds_obj: Dict[str, Any] = {}
 
-    print(f"[region] latest={latest}, WINDOW={WINDOW}, REFRESH={REFRESH}, targets={targets[:6]}... total={len(targets)}")
-
-    for rnd in targets:
+    for rnd in range(start_round, latest + 1):
         try:
             rounds_obj[str(rnd)] = fetch_round_region(session, rnd)
         except Exception as e:
             print(f"[region] ERROR round={rnd}: {e}")
         time.sleep(0.12)
 
-    rounds_obj = trim_window(rounds_obj, latest)
+    # 보기 좋게 정렬 (최신 위)
+    keys = sorted(rounds_obj.keys(), key=lambda x: int(x), reverse=SORT_DESC)
+    rounds_obj = {k: rounds_obj[k] for k in keys}
 
     out = {
         "meta": {
             "latestRound": latest,
-            "window": WINDOW,
-            "refresh": REFRESH,
+            "range": RANGE,
             "updatedAt": now_kst_iso(),
         },
         "rounds": rounds_obj,
