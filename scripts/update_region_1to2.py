@@ -10,10 +10,8 @@ from bs4 import BeautifulSoup
 
 OUT = "data/region_1to2.json"
 
-# ✅ 회차별 배출점 페이지 (HTML 내에 1등/2등 섹션이 같이 있는 경우가 많음)
-STORE_URL = "https://dhlottery.co.kr/store.do?method=topStore&drwNo={round}&pageGubun=L645"
-
-# 최신 회차 확인용 API
+# ✅ topStore는 "페이지 URL + POST 바디" 조합이 표준적으로 잘 동작함
+POST_URL = "https://dhlottery.co.kr/store.do?method=topStore&pageGubun=L645"
 API_ROUND = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={round}"
 
 HEADERS = {
@@ -22,8 +20,10 @@ HEADERS = {
     "Referer": "https://dhlottery.co.kr/",
 }
 
-# ✅ 운영 파라미터(필요시 Actions env로 조정 가능)
-RANGE = int(os.getenv("REGION_RANGE", "5"))  # 기본 5회만 갱신
+# 운영 파라미터(필요 시 Actions env로 조절)
+RANGE = int(os.getenv("REGION_RANGE", "5"))
+MAX_PAGES = int(os.getenv("REGION_MAX_PAGES", "200"))   # 2등 많을 때 대비
+SLEEP_PER_PAGE = float(os.getenv("REGION_SLEEP_PER_PAGE", "0.12"))
 TIMEOUT = int(os.getenv("REGION_TIMEOUT", "25"))
 
 SIDO_LIST = [
@@ -82,15 +82,6 @@ def get_latest_round_guess(session: requests.Session, max_tries: int = 80) -> in
     raise RuntimeError("latestRound를 찾지 못했습니다.")
 
 
-def fetch_round_html(session: requests.Session, round_no: int) -> BeautifulSoup:
-    url = STORE_URL.format(round=round_no)
-    r = session.get(url, headers=HEADERS, timeout=TIMEOUT)
-    r.raise_for_status()
-    if not r.encoding or r.encoding.lower() in ("iso-8859-1", "ascii"):
-        r.encoding = r.apparent_encoding
-    return BeautifulSoup(r.text, "lxml")
-
-
 def detect_sido(addr: str) -> Optional[str]:
     if not addr:
         return None
@@ -101,7 +92,6 @@ def detect_sido(addr: str) -> Optional[str]:
 
 def extract_address_from_row_cells(cells: list[str]) -> Optional[str]:
     texts = [normalize_text(c) for c in cells if normalize_text(c)]
-
     for t in texts:
         if detect_sido(t):
             return t
@@ -116,10 +106,33 @@ def extract_address_from_row_cells(cells: list[str]) -> Optional[str]:
     return None
 
 
+def find_store_table(soup: BeautifulSoup):
+    """
+    rankNo/nowPage로 호출한 응답에는 보통 '당첨 판매점' 테이블 1개가 중심.
+    헤더에 '상호' + '소재지/주소'가 있는 테이블을 우선 선택.
+    """
+    tables = soup.find_all("table")
+    best = None
+    best_score = -1.0
+    for tb in tables:
+        txt = normalize_text(tb.get_text(" ", strip=True))
+        score = 0.0
+        if "상호" in txt:
+            score += 2
+        if "소재지" in txt or "주소" in txt:
+            score += 2
+        if "번호선택구분" in txt or "구분" in txt:
+            score += 1
+        score += min(len(tb.find_all("tr")), 30) * 0.05
+        if score > best_score:
+            best_score = score
+            best = tb
+    return best
+
+
 def parse_rows_from_table(tb) -> list[list[str]]:
     if tb is None:
         return []
-
     rows: list[list[str]] = []
     for tr in tb.find_all("tr"):
         tds = tr.find_all(["td", "th"])
@@ -128,92 +141,89 @@ def parse_rows_from_table(tb) -> list[list[str]]:
         cells = [normalize_text(td.get_text(" ", strip=True)) for td in tds]
         headerish = " ".join(cells)
 
-        # 헤더 제거
+        # 헤더/빈 결과 제거
         if ("상호" in headerish and ("소재지" in headerish or "주소" in headerish)):
             continue
-        # "조회된 내역이 없습니다" 제거
         if "조회" in headerish and "없" in headerish:
             continue
 
+        # 실제 데이터 row는 보통 3~4컬럼 이상
         if len(cells) >= 3:
             rows.append(cells)
-
     return rows
 
 
-def find_rank_table(soup: BeautifulSoup, rank_no: int):
+def extract_max_page(soup: BeautifulSoup) -> int:
     """
-    ✅ HTML 안에서 "1등/2등 ... 배출/판매점/당첨" 같은 라벨이 있는 섹션을 찾고,
-    그 다음에 나오는 table을 해당 등수 테이블로 간주.
-    (rankNo 파라미터가 무시되어도 이 방식은 동작)
+    페이지 하단의 페이징 영역에서 최대 페이지를 추정.
+    goPage('N') 형태가 흔함.
+    못 찾으면 1.
     """
-    rank = str(rank_no)
-    candidates = []
-
-    # 라벨 후보 태그들
-    for tag in soup.find_all(["h2", "h3", "h4", "h5", "strong", "p", "span", "div", "li", "a"]):
-        txt = normalize_text(tag.get_text(" ", strip=True))
-        if not txt:
-            continue
-
-        # "1등", "2등" 포함 + 배출/판매점/당첨 같은 키워드
-        if (f"{rank}등" in txt or f"{rank} 등" in txt) and ("배출" in txt or "판매점" in txt or "당첨" in txt):
-            tb = tag.find_next("table")
-            if tb is not None:
-                candidates.append(tb)
-
-    # 후보가 여러 개면 데이터 row가 많은 테이블을 선택
-    best = None
-    best_n = -1
-    for tb in candidates:
-        n = len(tb.select("tbody tr")) or len(tb.find_all("tr"))
-        if n > best_n:
-            best_n = n
-            best = tb
-
-    return best
+    html = str(soup)
+    nums = [int(x) for x in re.findall(r"goPage\(['\"]?(\d+)['\"]?\)", html)]
+    return max(nums) if nums else 1
 
 
-def parse_rank_tables_fallback(soup: BeautifulSoup):
+def fetch_rank_page(session: requests.Session, round_no: int, rank_no: int, page: int) -> BeautifulSoup:
+    # 1등은 rankNo 빈값, 2등은 '2'
+    rank_val = "" if rank_no == 1 else str(rank_no)
+
+    data = {
+        "method": "topStore",
+        "nowPage": str(page),
+        "rankNo": rank_val,
+        "gameNo": "5133",
+        "drwNo": str(round_no),
+        "schKey": "all",
+        "schVal": "",
+    }
+
+    r = session.post(POST_URL, headers=HEADERS, data=data, timeout=TIMEOUT)
+    r.raise_for_status()
+    if not r.encoding or r.encoding.lower() in ("iso-8859-1", "ascii"):
+        r.encoding = r.apparent_encoding
+    return BeautifulSoup(r.text, "lxml")
+
+
+def fetch_rank_rows(session: requests.Session, round_no: int, rank_no: int) -> list[list[str]]:
     """
-    마지막 보험: 테이블을 여러 개 스캔해서 주소 히트가 나는 테이블 2개를 뽑음
+    ✅ nowPage를 1..N 돌면서 row를 누적.
+    (서버가 nowPage를 무시해서 매번 1페이지를 주면, dedup + maxPage로 잡아냄)
     """
-    tables = soup.find_all("table")
-    candidate = []
+    all_rows: list[list[str]] = []
+    seen = set()
 
-    for tb in tables:
-        trs = tb.find_all("tr")
-        if len(trs) < 2:
-            continue
-        context = normalize_text(tb.get_text(" ", strip=True))
-        score = 0
-        if "소재지" in context or "주소" in context:
-            score += 2
-        if "상호" in context:
-            score += 1
-        candidate.append((score, tb))
+    first = fetch_rank_page(session, round_no, rank_no, 1)
+    max_page = min(extract_max_page(first), MAX_PAGES)
 
-    candidate.sort(key=lambda x: x[0], reverse=True)
-    top = [tb for _, tb in candidate[:8]]
-
-    parsed = []
-    for tb in top:
+    def consume(soup: BeautifulSoup) -> int:
+        tb = find_store_table(soup)
         rows = parse_rows_from_table(tb)
+        new_cnt = 0
+        for cells in rows:
+            key = "|".join(cells)
+            if key in seen:
+                continue
+            seen.add(key)
+            all_rows.append(cells)
+            new_cnt += 1
+        return new_cnt
 
-        # 주소 히트가 최소 1개라도 있어야 채택
-        hits = 0
-        for cells in rows[:15]:
-            addr = extract_address_from_row_cells(cells)
-            if detect_sido(addr or ""):
-                hits += 1
-        if hits >= 1:
-            parsed.append(rows)
+    consume(first)
 
-    if len(parsed) >= 2:
-        return parsed[0], parsed[1]
-    if len(parsed) == 1:
-        return parsed[0], []
-    return [], []
+    for p in range(2, max_page + 1):
+        soup = fetch_rank_page(session, round_no, rank_no, p)
+        new_cnt = consume(soup)
+
+        # 페이지를 넘겼는데 신규 row가 0이면:
+        # - 마지막 페이지에 도달했거나
+        # - 서버가 nowPage를 무시하고 같은 페이지를 주는 상황
+        if new_cnt == 0:
+            break
+
+        time.sleep(SLEEP_PER_PAGE)
+
+    return all_rows
 
 
 def tally(rows: list[list[str]]):
@@ -250,25 +260,15 @@ def tally(rows: list[list[str]]):
 
 
 def fetch_round_region(session: requests.Session, round_no: int) -> dict:
-    soup = fetch_round_html(session, round_no)
-
-    tb1 = find_rank_table(soup, 1)
-    tb2 = find_rank_table(soup, 2)
-
-    r1_rows = parse_rows_from_table(tb1) if tb1 else []
-    r2_rows = parse_rows_from_table(tb2) if tb2 else []
-
-    # fallback (라벨 기반 탐지가 실패한 경우)
-    if not r1_rows or not r2_rows:
-        fb1, fb2 = parse_rank_tables_fallback(soup)
-        if not r1_rows:
-            r1_rows = fb1
-        if not r2_rows:
-            r2_rows = fb2
+    r1_rows = fetch_rank_rows(session, round_no, 1)
+    r2_rows = fetch_rank_rows(session, round_no, 2)
 
     print(f"[region] round={round_no} r1_rows={len(r1_rows)} r2_rows={len(r2_rows)}")
 
-    return {"rank1": tally(r1_rows), "rank2": tally(r2_rows)}
+    return {
+        "rank1": tally(r1_rows),
+        "rank2": tally(r2_rows),
+    }
 
 
 def main():
@@ -293,10 +293,14 @@ def main():
             rounds_obj[str(rnd)] = fetch_round_region(session, rnd)
         except Exception as e:
             print(f"[region] ERROR round={rnd}: {e}")
-        time.sleep(0.15)
+        time.sleep(0.2)
 
     out = {
-        "meta": {"latestRound": latest, "range": RANGE, "updatedAt": now_kst_iso()},
+        "meta": {
+            "latestRound": latest,
+            "range": RANGE,
+            "updatedAt": now_kst_iso(),
+        },
         "rounds": rounds_obj,
     }
 
