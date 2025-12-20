@@ -26,7 +26,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -52,10 +52,8 @@ jobs:
         shell: bash
         env:
           PYTHONUNBUFFERED: "1"
-          # ✅ region 증분 운영 파라미터
-          REGION_WINDOW: "40"
-          REGION_REFRESH: "2"
-          REGION_BOOTSTRAP_ON_EMPTY: "1"
+          # ✅ 매주 최신 40회 전체 재수집
+          REGION_RANGE: "40"
         run: |
           set -euo pipefail
 
@@ -84,7 +82,7 @@ jobs:
           echo "==> update_prize_2to5.py"
           retry python -u scripts/update_prize_2to5.py
 
-          echo "==> update_region_1to2.py (WINDOW=$REGION_WINDOW, REFRESH=$REGION_REFRESH)"
+          echo "==> update_region_1to2.py (REGION_RANGE=$REGION_RANGE)"
           retry python -u scripts/update_region_1to2.py
 
       - name: Validate generated files (non-empty)
@@ -107,7 +105,6 @@ jobs:
 
           latest = str(region["meta"]["latestRound"])
 
-          # prize 구조 2종 대응
           if isinstance(prize.get("rounds"), dict):
             p_round = prize["rounds"].get(latest, {})
           else:
