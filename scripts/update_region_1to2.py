@@ -3,14 +3,15 @@ import os
 import re
 import time
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 import requests
 from bs4 import BeautifulSoup
 
 OUT = "data/region_1to2.json"
 
-# 로또6/45 배출점 페이지
-STORE_URL = "https://dhlottery.co.kr/store.do?method=topStore&drwNo={round}&pageGubun=L645"
+# ✅ topStore 엔드포인트 (method/pageGubun은 쿼리로 고정)
+TOPSTORE_URL = "https://dhlottery.co.kr/store.do?method=topStore&pageGubun=L645"
 
 # 최신 회차 추정용 공식 API
 API_ROUND = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={round}"
@@ -18,9 +19,11 @@ API_ROUND = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={
 HEADERS = {
     "User-Agent": "Mozilla/5.0",
     "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+    "Referer": "https://dhlottery.co.kr/",
 }
 
 RANGE = 40
+MAX_PAGES = 80  # 2등 배출점 페이지네이션 대비
 
 SIDO_LIST = [
     "서울", "경기", "인천", "부산", "대구", "광주", "대전", "울산",
@@ -45,12 +48,16 @@ def fetch_json(url: str, timeout=20) -> dict:
     return r.json()
 
 
-def fetch_html(url: str, timeout=25) -> tuple[str, int]:
-    r = requests.get(url, headers=HEADERS, timeout=timeout)
+def fetch_html_post(data: dict, timeout=25) -> str:
+    """
+    ✅ topStore는 화면상 탭/페이지 이동 시 form 파라미터로 조회되는 케이스가 많아서
+    POST + form-data로 고정한다.
+    """
+    r = requests.post(TOPSTORE_URL, headers=HEADERS, data=data, timeout=timeout)
     r.raise_for_status()
     if not r.encoding or r.encoding.lower() in ("iso-8859-1", "ascii"):
         r.encoding = r.apparent_encoding
-    return r.text, r.status_code
+    return r.text
 
 
 def is_success_round(d: dict) -> bool:
@@ -87,7 +94,7 @@ def normalize_text(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "").strip())
 
 
-def detect_sido(addr: str):
+def detect_sido(addr: str) -> Optional[str]:
     if not addr:
         return None
     a = normalize_text(addr)
@@ -95,8 +102,9 @@ def detect_sido(addr: str):
     return m.group(1) if m else None
 
 
-def extract_address_from_row_cells(cells: list[str]) -> str | None:
+def extract_address_from_row_cells(cells: list[str]) -> Optional[str]:
     texts = [normalize_text(c) for c in cells if normalize_text(c)]
+
     # 1) 셀 단위에서 '시/도'로 시작하는 주소 후보
     for t in texts:
         if detect_sido(t):
@@ -114,61 +122,95 @@ def extract_address_from_row_cells(cells: list[str]) -> str | None:
     return None
 
 
-def parse_rank_tables(soup: BeautifulSoup):
+def find_store_table(soup: BeautifulSoup):
     """
-    1등/2등 배출점 테이블을 최대한 안정적으로 찾기:
-    - 테이블을 여러 개 후보로 잡아보고
-    - 실제 row에서 주소(시/도) 히트가 나오는 테이블을 채택
+    페이지 내 여러 table 중 '당첨 판매점' 목록 테이블을 찾는다.
+    (헤더에 '상호' + '소재지/주소'가 있는 테이블 우선)
     """
     tables = soup.find_all("table")
-    candidate = []
+    best = None
+    best_score = -1
 
     for tb in tables:
-        trs = tb.find_all("tr")
-        if len(trs) < 2:
-            continue
-        context = normalize_text(tb.get_text(" ", strip=True))
+        header_text = normalize_text(tb.get_text(" ", strip=True))
         score = 0
-        if "배출" in context:
-            score += 1
-        if "소재지" in context or "주소" in context:
+        if "상호" in header_text:
             score += 2
-        if "1등" in context:
+        if "소재지" in header_text or "주소" in header_text:
+            score += 2
+        if "번호선택구분" in header_text or "구분" in header_text:
             score += 1
-        if "2등" in context:
+        if "위치" in header_text or "지도" in header_text:
             score += 1
-        candidate.append((score, tb))
 
-    candidate.sort(key=lambda x: x[0], reverse=True)
-    top = [tb for _, tb in candidate[:6]]
+        # 데이터 row가 많을수록 가산
+        trs = tb.find_all("tr")
+        score += min(len(trs), 30) * 0.05
 
-    parsed = []
-    for tb in top:
-        rows = []
-        for tr in tb.find_all("tr"):
-            tds = tr.find_all(["td", "th"])
-            if not tds:
-                continue
-            cells = [normalize_text(td.get_text(" ", strip=True)) for td in tds]
-            headerish = " ".join(cells)
-            if ("상호" in headerish and ("소재지" in headerish or "주소" in headerish)):
-                continue
+        if score > best_score:
+            best_score = score
+            best = tb
+
+    return best
+
+
+def parse_rows_from_table(tb) -> list[list[str]]:
+    if tb is None:
+        return []
+
+    rows = []
+    for tr in tb.find_all("tr"):
+        tds = tr.find_all(["td", "th"])
+        if not tds:
+            continue
+        cells = [normalize_text(td.get_text(" ", strip=True)) for td in tds]
+        headerish = " ".join(cells)
+        # 헤더 제거
+        if ("상호" in headerish and ("소재지" in headerish or "주소" in headerish)):
+            continue
+        # 실데이터 같이 보이는 것만
+        if len(cells) >= 3:
             rows.append(cells)
+    return rows
 
-        # 주소 히트가 최소 1개라도 있어야 채택
-        hits = 0
-        for cells in rows[:12]:
-            addr = extract_address_from_row_cells(cells)
-            if detect_sido(addr or ""):
-                hits += 1
-        if hits >= 1:
-            parsed.append(rows)
 
-    if len(parsed) >= 2:
-        return parsed[0], parsed[1]
-    if len(parsed) == 1:
-        return parsed[0], []
-    return [], []
+def fetch_rank_rows(round_no: int, rank_no: int) -> list[list[str]]:
+    """
+    ✅ rankNo(1/2) + nowPage(1..N)을 돌면서 모든 row를 누적한다.
+    중복 방지 위해 row 문자열 키로 dedup.
+    """
+    seen = set()
+    all_rows: list[list[str]] = []
+
+    for page in range(1, MAX_PAGES + 1):
+        html = fetch_html_post(
+            {
+                "drwNo": str(round_no),
+                "rankNo": str(rank_no),   # ✅ 핵심: 1등/2등 분리
+                "nowPage": str(page),     # ✅ 핵심: 페이지네이션
+            },
+            timeout=25,
+        )
+        soup = BeautifulSoup(html, "lxml")
+        tb = find_store_table(soup)
+        rows = parse_rows_from_table(tb)
+
+        new_cnt = 0
+        for cells in rows:
+            key = "|".join(cells)
+            if key in seen:
+                continue
+            seen.add(key)
+            all_rows.append(cells)
+            new_cnt += 1
+
+        # 더 이상 신규 row가 없으면 종료
+        if new_cnt == 0:
+            break
+
+        time.sleep(0.20)
+
+    return all_rows
 
 
 def tally(rows: list[list[str]]):
@@ -178,7 +220,6 @@ def tally(rows: list[list[str]]):
     total = 0
 
     for cells in rows:
-        # 빈 row는 스킵
         joined = normalize_text(" ".join(cells))
         if not joined:
             continue
@@ -207,14 +248,13 @@ def tally(rows: list[list[str]]):
 
 
 def fetch_round_region(round_no: int) -> dict:
-    url = STORE_URL.format(round=round_no)
-    html, status = fetch_html(url, timeout=25)
-    soup = BeautifulSoup(html, "lxml")
+    r1_rows = fetch_rank_rows(round_no, 1)
+    r2_rows = fetch_rank_rows(round_no, 2)
 
-    r1_rows, r2_rows = parse_rank_tables(soup)
-
-    # 로그(필요하면 남겨두세요)
-    print(f"[region] round={round_no} status={status} len={len(html)} r1_rows={len(r1_rows)} r2_rows={len(r2_rows)}")
+    print(
+        f"[region] round={round_no} "
+        f"r1_rows={len(r1_rows)} r2_rows={len(r2_rows)}"
+    )
 
     rank1 = tally(r1_rows)
     rank2 = tally(r2_rows)
