@@ -3,13 +3,12 @@ import os
 import re
 import time
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 import requests
 from bs4 import BeautifulSoup
 
 OUT = "data/region_1to2.json"
-
 POST_URL = "https://dhlottery.co.kr/store.do?method=topStore&pageGubun=L645"
 API_ROUND = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={round}"
 
@@ -19,10 +18,15 @@ HEADERS = {
     "Referer": "https://dhlottery.co.kr/",
 }
 
-RANGE = int(os.getenv("REGION_RANGE", "5"))
-MAX_PAGES = int(os.getenv("REGION_MAX_PAGES", "200"))
+# ✅ 최신 N회만 유지/갱신 (환경변수로 조정 가능)
+RANGE = int(os.getenv("REGION_RANGE", "40"))
+
+MAX_PAGES = int(os.getenv("REGION_MAX_PAGES", "250"))
 SLEEP_PER_PAGE = float(os.getenv("REGION_SLEEP_PER_PAGE", "0.12"))
 TIMEOUT = int(os.getenv("REGION_TIMEOUT", "25"))
+
+# ✅ 파일 내 rounds 키 정렬: 최신회차가 위
+SORT_DESC = os.getenv("REGION_SORT_DESC", "1") == "1"
 
 SIDO_LIST = [
     "서울", "경기", "인천", "부산", "대구", "광주", "대전", "울산",
@@ -55,6 +59,8 @@ def is_success_round(d: dict) -> bool:
 
 
 def get_latest_round_guess(session: requests.Session, max_tries: int = 80) -> int:
+    # 기존 파일의 latestRound가 있으면 그 근처에서 찾되,
+    # 없으면 1200부터 탐색
     start = 1200
     if os.path.exists(OUT):
         try:
@@ -88,7 +94,7 @@ def detect_sido(addr: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def extract_address_from_row_cells(cells: list[str]) -> Optional[str]:
+def extract_address_from_row_cells(cells: List[str]) -> Optional[str]:
     texts = [normalize_text(c) for c in cells if normalize_text(c)]
     for t in texts:
         if detect_sido(t):
@@ -104,61 +110,59 @@ def extract_address_from_row_cells(cells: list[str]) -> Optional[str]:
     return None
 
 
-def parse_rows_from_table(tb) -> list[list[str]]:
+def parse_rows_from_table(tb) -> List[List[str]]:
     if tb is None:
         return []
-    rows: list[list[str]] = []
+
+    rows: List[List[str]] = []
     for tr in tb.find_all("tr"):
         tds = tr.find_all(["td", "th"])
         if not tds:
             continue
+
         cells = [normalize_text(td.get_text(" ", strip=True)) for td in tds]
         headerish = " ".join(cells)
+
         if ("상호" in headerish and ("소재지" in headerish or "주소" in headerish)):
             continue
         if "조회" in headerish and "없" in headerish:
             continue
+
         if len(cells) >= 3:
             rows.append(cells)
+
     return rows
 
 
-def find_rank_table(soup: BeautifulSoup, rank_no: int):
-    """
-    ✅ 응답 HTML 안에서 '1등'/'2등' 라벨이 붙은 섹션을 찾아,
-    그 바로 다음 table을 해당 등수 테이블로 선택한다.
-    (서버가 rankNo를 무시해도, HTML에 둘 다 있으면 정확히 분리 가능)
-    """
-    rank = str(rank_no)
+def find_store_table(soup: BeautifulSoup):
+    tables = soup.find_all("table")
     best = None
-    best_n = -1
+    best_score = -1.0
 
-    for tag in soup.find_all(["h2", "h3", "h4", "h5", "strong", "p", "span", "div", "li", "a"]):
-        txt = normalize_text(tag.get_text(" ", strip=True))
-        if not txt:
-            continue
+    for tb in tables:
+        txt = normalize_text(tb.get_text(" ", strip=True))
+        score = 0.0
+        if "상호" in txt:
+            score += 2
+        if "소재지" in txt or "주소" in txt:
+            score += 2
+        if "번호선택구분" in txt or "구분" in txt:
+            score += 1
+        score += min(len(tb.find_all("tr")), 30) * 0.05
 
-        # 조건을 넓게 잡음: "1등/2등" + "배출/판매점/당첨" 중 하나만 있어도 인정
-        if (f"{rank}등" in txt or f"{rank} 등" in txt) and ("배출" in txt or "판매점" in txt or "당첨" in txt):
-            tb = tag.find_next("table")
-            if tb is None:
-                continue
-            n = len(tb.select("tbody tr")) or len(tb.find_all("tr"))
-            if n > best_n:
-                best_n = n
-                best = tb
+        if score > best_score:
+            best_score = score
+            best = tb
 
     return best
 
 
 def fetch_rank_page(session: requests.Session, round_no: int, rank_no: int, page: int) -> BeautifulSoup:
-    # ✅ 핵심: rankNo를 빈값이 아니라 '1'/'2'로 명시
-    # (최근/일부 회차에서 빈값/2가 무시되는 케이스 방지)
     data = {
         "method": "topStore",
         "nowPage": str(page),
-        "rankNo": str(rank_no),     # <- 여기!
-        "rank": str(rank_no),       # <- 서버/스크립트가 rank를 쓰는 경우 대비
+        "rankNo": str(rank_no),    # ✅ 1/2 명시
+        "rank": str(rank_no),
         "gameNo": "5133",
         "drwNo": str(round_no),
         "schKey": "all",
@@ -172,25 +176,15 @@ def fetch_rank_page(session: requests.Session, round_no: int, rank_no: int, page
     return BeautifulSoup(r.text, "lxml")
 
 
-def fetch_rank_rows(session: requests.Session, round_no: int, rank_no: int) -> list[list[str]]:
-    """
-    ✅ nowPage를 1..N 돌면서 row 누적 (페이지가 안 넘어가면 dedup로 멈춤)
-    ✅ 테이블 선택은 등수 라벨 기반(find_rank_table) 우선
-    """
+def fetch_rank_rows(session: requests.Session, round_no: int, rank_no: int) -> List[List[str]]:
     seen = set()
-    all_rows: list[list[str]] = []
+    all_rows: List[List[str]] = []
 
     for page in range(1, MAX_PAGES + 1):
         soup = fetch_rank_page(session, round_no, rank_no, page)
-
-        # rank 라벨 기반 테이블 우선, 없으면 첫 table 중 그럴듯한 것 사용
-        tb = find_rank_table(soup, rank_no)
-        if tb is None:
-            # fallback: 첫 번째로 큰 table
-            tables = soup.find_all("table")
-            tb = tables[0] if tables else None
-
+        tb = find_store_table(soup)
         rows = parse_rows_from_table(tb)
+
         new_cnt = 0
         for cells in rows:
             key = "|".join(cells)
@@ -208,7 +202,7 @@ def fetch_rank_rows(session: requests.Session, round_no: int, rank_no: int) -> l
     return all_rows
 
 
-def tally(rows: list[list[str]]):
+def tally(rows: List[List[str]]) -> Dict[str, Any]:
     by_sido = {s: 0 for s in SIDO_LIST}
     internet = 0
     other = 0
@@ -241,13 +235,16 @@ def tally(rows: list[list[str]]):
     }
 
 
-def fetch_round_region(session: requests.Session, round_no: int) -> dict:
-    r1_rows = fetch_rank_rows(session, round_no, 1)
-    r2_rows = fetch_rank_rows(session, round_no, 2)
+def sort_and_trim_rounds(rounds_obj: Dict[str, Any], latest: int) -> Dict[str, Any]:
+    """
+    ✅ 최신 RANGE개만 남기고(삭제), 보기 좋게 정렬
+    """
+    start_round = max(1, latest - (RANGE - 1))
+    keep = {str(r): rounds_obj.get(str(r)) for r in range(start_round, latest + 1)}
+    keep = {k: v for k, v in keep.items() if v is not None}
 
-    print(f"[region] round={round_no} r1_rows={len(r1_rows)} r2_rows={len(r2_rows)}")
-
-    return {"rank1": tally(r1_rows), "rank2": tally(r2_rows)}
+    keys = sorted(keep.keys(), key=lambda x: int(x), reverse=SORT_DESC)
+    return {k: keep[k] for k in keys}
 
 
 def main():
@@ -257,7 +254,8 @@ def main():
     latest = get_latest_round_guess(session)
     start_round = max(1, latest - (RANGE - 1))
 
-    rounds_obj = {}
+    # 기존 파일을 읽되, 마지막에 최신 RANGE만 남길 거라 오래된 건 무시해도 됨
+    rounds_obj: Dict[str, Any] = {}
     if os.path.exists(OUT):
         try:
             with open(OUT, "r", encoding="utf-8") as f:
@@ -267,15 +265,26 @@ def main():
         except Exception:
             rounds_obj = {}
 
+    # ✅ 최신 RANGE 회를 항상 최신으로 덮어쓰기
     for rnd in range(start_round, latest + 1):
         try:
-            rounds_obj[str(rnd)] = fetch_round_region(session, rnd)
+            rounds_obj[str(rnd)] = {
+                "rank1": tally(fetch_rank_rows(session, rnd, 1)),
+                "rank2": tally(fetch_rank_rows(session, rnd, 2)),
+            }
+            print(f"[region] round={rnd} updated")
         except Exception as e:
             print(f"[region] ERROR round={rnd}: {e}")
-        time.sleep(0.2)
+        time.sleep(0.12)
+
+    rounds_obj = sort_and_trim_rounds(rounds_obj, latest)
 
     out = {
-        "meta": {"latestRound": latest, "range": RANGE, "updatedAt": now_kst_iso()},
+        "meta": {
+            "latestRound": latest,
+            "range": RANGE,
+            "updatedAt": now_kst_iso(),
+        },
         "rounds": rounds_obj,
     }
 
