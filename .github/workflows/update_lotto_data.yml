@@ -1,4 +1,4 @@
-name: Update lotto data
+name: Update lotto data (heatmap + prize 2~5 + region 1~2)
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ on:
     - cron: "0 12 * * 6"
     # KST 토요일 21:05 = UTC 토요일 12:05
     - cron: "5 12 * * 6"
-    # (선택) KST 토요일 21:30 = UTC 토요일 12:30  ← 최종 확정용
+    # KST 토요일 21:30 = UTC 토요일 12:30 (최종 확정용)
     - cron: "30 12 * * 6"
 
 permissions:
@@ -26,6 +26,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -37,17 +38,49 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r scripts/requirements.txt
 
-      - name: Run update scripts
+      # ✅ 네트워크/API 일시 오류 대비: 재시도 래퍼 + -u(로그 버퍼링 제거)
+      - name: Run update scripts (with retry)
+        shell: bash
+        env:
+          PYTHONUNBUFFERED: "1"
         run: |
-          python scripts/update_heatmap.py
-          python scripts/update_prize_2to5.py
-          python scripts/update_region_1to2.py
+          set -euo pipefail
+
+          retry () {
+            local n=1
+            local max=3
+            local delay=3
+            while true; do
+              "$@" && break || {
+                if [[ $n -lt $max ]]; then
+                  echo "Command failed. Attempt $n/$max. Retrying in ${delay}s..."
+                  sleep $delay
+                  n=$((n+1))
+                  delay=$((delay*2))
+                else
+                  echo "Command failed after $max attempts."
+                  return 1
+                fi
+              }
+            done
+          }
+
+          echo "==> update_heatmap.py"
+          retry python -u scripts/update_heatmap.py
+
+          echo "==> update_prize_2to5.py"
+          retry python -u scripts/update_prize_2to5.py
+
+          echo "==> update_region_1to2.py"
+          retry python -u scripts/update_region_1to2.py
 
       - name: Validate generated files (non-empty)
         shell: bash
@@ -57,13 +90,15 @@ jobs:
           test -s data/prize_2to5.json
           test -s data/region_1to2.json
 
-      # ✅ 여기(커밋 전에) 넣는 게 정답
+      # ✅ 여기(커밋 전에) 넣어야 “불완전 2등”이면 커밋이 막힘
       - name: Validate region_1to2.json (rank2 must be meaningful)
         shell: bash
+        env:
+          MIN_RANK2_STORES: "30"
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, sys
+          import json, os, sys
 
           path = "data/region_1to2.json"
           d = json.load(open(path, encoding="utf-8"))
@@ -77,10 +112,10 @@ jobs:
             sys.exit(1)
 
           total = int(rank2.get("totalStores", 0))
+          min_need = int(os.getenv("MIN_RANK2_STORES", "30"))
 
-          # ✅ 2등이 너무 작으면(게시 전/첫 페이지만 집계 등) 커밋 금지
-          if total < 30:
-            print(f"ERROR: {latest} rank2 too small: {total} (likely incomplete)")
+          if total < min_need:
+            print(f"ERROR: {latest} rank2 too small: {total} (min={min_need})")
             sys.exit(1)
 
           print(f"OK: {latest} rank2 totalStores={total}")
@@ -88,6 +123,8 @@ jobs:
 
       - name: Commit & push if changed
         shell: bash
+        env:
+          BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
 
@@ -102,4 +139,36 @@ jobs:
           fi
 
           git commit -m "Update lotto data"
-          git push
+
+          # ✅ 원격 선커밋/경합 대비: rebase 후 재시도 + 백오프
+          for i in 1 2 3; do
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Push succeeded"
+              exit 0
+            fi
+
+            echo "Push failed (attempt $i). Rebase and retry..."
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH" || { git rebase --abort; }
+            sleep $((i*5))
+          done
+
+          echo "Push failed after retries"
+          exit 1
+
+      # (선택) workflow_dispatch에서만 디버그 로그
+      - name: Debug - show generated files and git status
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          echo "event_name=${{ github.event_name }}"
+          echo "schedule=${{ github.event.schedule }}"
+          echo "=== ls data ==="
+          ls -al data || true
+          echo "=== head heatmap.json ==="
+          head -n 40 data/heatmap.json || true
+          echo "=== head prize_2to5.json ==="
+          head -n 40 data/prize_2to5.json || true
+          echo "=== head region_1to2.json ==="
+          head -n 40 data/region_1to2.json || true
+          echo "=== git status ==="
+          git status --porcelain || true
