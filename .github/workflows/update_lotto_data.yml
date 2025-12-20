@@ -52,8 +52,18 @@ jobs:
         shell: bash
         env:
           PYTHONUNBUFFERED: "1"
+
           # ✅ 매주 최신 40회 전체 재수집
           REGION_RANGE: "40"
+
+          # ✅ 안정성/속도 튜닝(필요 시 조정)
+          REGION_TIMEOUT: "25"
+          REGION_MAX_PAGES: "220"
+          REGION_SLEEP_PER_PAGE: "0.10"
+
+          # ✅ HTTP 재시도(429/5xx 백오프)
+          REGION_HTTP_RETRY_TOTAL: "6"
+          REGION_HTTP_BACKOFF: "0.8"
         run: |
           set -euo pipefail
 
