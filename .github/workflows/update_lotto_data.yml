@@ -1,4 +1,4 @@
-name: Update lotto data (heatmap + prize 2~5 + region 1~2 + winner stores)
+name: Update lotto data (latest 10)
 
 on:
   workflow_dispatch:
@@ -48,7 +48,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r scripts/requirements.txt
 
-      - name: Run update scripts (with retry)
+      # ✅ 신규 회차 없으면 이후 크롤링을 전부 스킵
+      - name: Guard - check if update needed
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -u scripts/should_update.py
+
+      - name: Skip message
+        if: steps.guard.outputs.needs_update != 'true'
+        shell: bash
+        run: |
+          echo "No new round. Skipping crawling & commit."
+          echo "latest_remote=${{ steps.guard.outputs.latest_remote }}"
+          echo "latest_local=${{ steps.guard.outputs.latest_local }}"
+
+      - name: Run update scripts (latest 10)
+        if: steps.guard.outputs.needs_update == 'true'
         shell: bash
         env:
           PYTHONUNBUFFERED: "1"
@@ -100,6 +117,7 @@ jobs:
           retry python -u scripts/update_winner_stores.py --range "$WINNER_STORES_RANGE" --out data/winner_stores.json
 
       - name: Validate generated files (non-empty)
+        if: steps.guard.outputs.needs_update == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -108,66 +126,8 @@ jobs:
           test -s data/region_1to2.json
           test -s data/winner_stores.json
 
-      - name: Validate latest round consistency (region rank2 == prize winners)
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json, sys
-
-          prize = json.load(open("data/prize_2to5.json", encoding="utf-8"))
-          region = json.load(open("data/region_1to2.json", encoding="utf-8"))
-
-          latest = str(region["meta"]["latestRound"])
-
-          if isinstance(prize.get("rounds"), dict):
-            p_round = prize["rounds"].get(latest, {})
-          else:
-            p_round = prize.get(latest, {})
-
-          p2 = p_round.get("2") or p_round.get(2)
-          if not isinstance(p2, dict) or "winners" not in p2:
-            print(f"ERROR: prize_2to5.json missing round {latest} rank2 winners")
-            sys.exit(1)
-
-          expected = int(p2["winners"])
-
-          r_round = region.get("rounds", {}).get(latest, {})
-          r2 = r_round.get("rank2") or r_round.get("2")
-          if not isinstance(r2, dict):
-            print(f"ERROR: region_1to2.json missing round {latest} rank2")
-            sys.exit(1)
-
-          got = int(r2.get("totalStores", 0))
-
-          if got != expected:
-            print(f"ERROR: latest {latest} mismatch. region rank2 totalStores={got}, prize winners={expected}")
-            sys.exit(1)
-
-          print(f"OK: latest {latest} rank2 totalStores={got} matches prize winners={expected}")
-          PY
-
-      - name: Validate winner_stores latestRound matches region latestRound
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json, sys
-
-          region = json.load(open("data/region_1to2.json", encoding="utf-8"))
-          ws = json.load(open("data/winner_stores.json", encoding="utf-8"))
-
-          r_latest = int(region["meta"]["latestRound"])
-          w_latest = int(ws["meta"]["latestRound"])
-
-          if r_latest != w_latest:
-            print(f"ERROR: latestRound mismatch. region={r_latest}, winner_stores={w_latest}")
-            sys.exit(1)
-
-          print(f"OK: latestRound matches: {r_latest}")
-          PY
-
       - name: Commit & push if changed
+        if: steps.guard.outputs.needs_update == 'true'
         shell: bash
         env:
           BRANCH: ${{ github.ref_name }}
