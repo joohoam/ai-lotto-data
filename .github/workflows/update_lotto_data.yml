@@ -2,6 +2,11 @@ name: Update lotto data (latest 10)
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Force update even if no new round (true/false)"
+        required: false
+        default: "false"
   schedule:
     # KST 토요일 20:45 = UTC 토요일 11:45
     - cron: "45 11 * * 6"
@@ -48,10 +53,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r scripts/requirements.txt
 
-      # ✅ 신규 회차 없으면 이후 크롤링을 전부 스킵
+      # ✅ 신규 회차 없으면 스킵하되, 수동 실행에서 force=true면 업데이트 강제
       - name: Guard - check if update needed
         id: guard
         shell: bash
+        env:
+          FORCE_UPDATE: ${{ github.event.inputs.force }}
         run: |
           set -euo pipefail
           python -u scripts/should_update.py
@@ -60,7 +67,7 @@ jobs:
         if: steps.guard.outputs.needs_update != 'true'
         shell: bash
         run: |
-          echo "No new round. Skipping crawling & commit."
+          echo "No new round (and not forced). Skipping crawling & commit."
           echo "latest_remote=${{ steps.guard.outputs.latest_remote }}"
           echo "latest_local=${{ steps.guard.outputs.latest_local }}"
 
@@ -69,17 +76,12 @@ jobs:
         shell: bash
         env:
           PYTHONUNBUFFERED: "1"
-
-          # ✅ 모든 작업: 최신 10회만
           REGION_RANGE: "10"
           WINNER_STORES_RANGE: "10"
 
-          # ✅ 안정성/속도 튜닝(필요 시 조정)
           REGION_TIMEOUT: "25"
           REGION_MAX_PAGES: "220"
           REGION_SLEEP_PER_PAGE: "0.10"
-
-          # ✅ HTTP 재시도(429/5xx 백오프)
           REGION_HTTP_RETRY_TOTAL: "6"
           REGION_HTTP_BACKOFF: "0.8"
         run: |
