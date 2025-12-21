@@ -24,7 +24,7 @@ HEADERS = {
 }
 
 # ✅ 매번 최신 N회 전체 재수집
-RANGE = int(os.getenv("REGION_RANGE", "40"))
+RANGE = int(os.getenv("REGION_RANGE", "10"))
 
 # 튜닝 파라미터 (env로 조정 가능)
 MAX_PAGES = int(os.getenv("REGION_MAX_PAGES", "220"))
