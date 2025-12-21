@@ -28,32 +28,38 @@ DEFAULT_HEADERS = {
 }
 
 
-def http_get(url: str, timeout: int = 20, retries: int = 3, sleep_sec: float = 0.6) -> requests.Response:
-    last_exc = None
+def http_get(url: str, timeout: int = 25, retries: int = 4, backoff: float = 0.8) -> requests.Response:
+    last = None
     for i in range(retries):
         try:
-            resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=timeout)
-            resp.raise_for_status()
-            return resp
+            r = requests.get(url, headers=DEFAULT_HEADERS, timeout=timeout)
+            r.raise_for_status()
+            return r
         except Exception as e:
-            last_exc = e
+            last = e
             if i < retries - 1:
-                time.sleep(sleep_sec * (i + 1))
-    raise RuntimeError(f"HTTP GET failed: {url} ({last_exc})")
+                time.sleep(backoff * (i + 1))
+    raise RuntimeError(f"HTTP GET failed: {url} ({last})")
 
 
-def decode_korean_html(resp: requests.Response) -> str:
+def decode_html(resp: requests.Response) -> str:
+    # 동행복권 페이지는 EUC-KR/UTF-8 혼재 가능성이 있어 "보수적으로" 처리
     enc = (resp.encoding or "").lower().strip()
     if not enc or enc in ("iso-8859-1", "latin-1"):
-        resp.encoding = resp.apparent_encoding or "euc-kr"
+        # requests가 인코딩을 못 잡는 경우가 잦아서 보정
+        guess = (resp.apparent_encoding or "").lower().strip()
+        if guess and guess not in ("ascii", "iso-8859-1", "latin-1"):
+            resp.encoding = guess
+        else:
+            resp.encoding = "euc-kr"
     try:
         return resp.text
     except Exception:
-        return resp.content.decode("euc-kr", errors="replace")
+        return resp.content.decode(resp.encoding or "euc-kr", errors="replace")
 
 
 def get_latest_round_from_bywin() -> Optional[int]:
-    html = decode_korean_html(http_get(BYWIN_URL))
+    html = decode_html(http_get(BYWIN_URL))
     m = re.search(r"lottoDrwNo\s*=\s*(\d+)", html)
     if m:
         return int(m.group(1))
@@ -68,22 +74,19 @@ def get_latest_round_from_bywin() -> Optional[int]:
 
 def lotto_api_success(drw_no: int) -> bool:
     url = LOTTO_API_URL.format(drwNo=drw_no)
-    resp = http_get(url)
-    data = resp.json()
+    r = http_get(url, timeout=20, retries=3, backoff=0.6)
+    data = r.json()
     return data.get("returnValue") == "success"
 
 
 def find_latest_round_by_api(max_hint: int = 2000) -> int:
-    lo = 1
-    hi = max_hint
+    lo, hi = 1, max_hint
     while lotto_api_success(hi):
         lo = hi
         hi *= 2
         if hi > 10000:
             break
-
-    left = lo
-    right = hi
+    left, right = lo, hi
     while left + 1 < right:
         mid = (left + right) // 2
         if lotto_api_success(mid):
@@ -95,17 +98,15 @@ def find_latest_round_by_api(max_hint: int = 2000) -> int:
 
 def get_latest_round() -> int:
     latest = get_latest_round_from_bywin()
-    if latest is not None:
-        return latest
-    return find_latest_round_by_api()
+    return latest if latest is not None else find_latest_round_by_api()
 
 
 @dataclass
 class StoreRow:
     round: int
-    rank: int  # 1 or 2
+    rank: int
     store_name: str
-    method: str  # 1등: 자동/수동, 2등: ""(대부분 없음)
+    method: str
     address: str
     sido: str
     sigungu: str
@@ -136,161 +137,194 @@ def normalize_region_from_address(address: str) -> Tuple[str, str]:
     addr = (address or "").strip()
     if not addr:
         return "", ""
-
     if "dhlottery.co.kr" in addr or "인터넷" in addr:
         return "온라인", ""
-
     parts = addr.split()
     if not parts:
         return "", ""
-
-    first = parts[0]
-    sido = _SIDO_ALIASES.get(first, first)
+    sido = _SIDO_ALIASES.get(parts[0], parts[0])
     sigungu = parts[1] if len(parts) >= 2 else ""
     return sido, sigungu
 
 
-def _find_table_by_label(soup: BeautifulSoup, label_regex: str) -> Optional[BeautifulSoup]:
-    # "1등 배출점" 또는 "2등 배출점" 라벨 근처 table 우선
-    label_nodes = soup.find_all(string=re.compile(label_regex))
-    for node in label_nodes:
-        parent = node.parent
-        if not parent:
-            continue
-        cand = parent.find_next("table")
-        if cand and cand.find_all("th"):
-            return cand
-    return None
+def _text(el) -> str:
+    return re.sub(r"\s+", " ", el.get_text(" ", strip=True)).strip()
 
 
-def _parse_table_rows_generic(table, round_no: int, rank: int) -> List[StoreRow]:
-    """
-    테이블 헤더를 보고 상호/구분/소재지 컬럼 위치를 유연하게 찾는다.
-    - 1등 테이블: 보통 "상호", "구분", "소재지"
-    - 2등 테이블: 보통 "상호", "소재지" (구분 없음)
-    """
-    # header index map
-    headers = [th.get_text(" ", strip=True) for th in table.find_all("th")]
-    headers = [re.sub(r"\s+", " ", h).strip() for h in headers]
+def _score_table(table) -> dict:
+    """문자 기반이 아니라 '구조' 기반으로 후보 테이블을 점수화."""
+    ths = [_text(th) for th in table.find_all("th")]
+    trs = table.find_all("tr")
+    td_rows = [tr.find_all("td") for tr in trs]
+    # 데이터 행( td가 있는 행 ) 개수
+    data_rows = [r for r in td_rows if len(r) >= 2]
 
-    def find_idx(keys: List[str]) -> Optional[int]:
-        for k in keys:
-            for i, h in enumerate(headers):
-                if k in h:
-                    return i
-        return None
+    max_cols = max((len(r) for r in data_rows), default=0)
+    header_join = " ".join(ths)
 
-    idx_name = find_idx(["상호", "상호명", "판매점"])
-    idx_method = find_idx(["구분"])  # 1등에 주로 존재
-    idx_addr = find_idx(["소재지", "주소", "소 재 지"])
+    # 신호들(있으면 가산점)
+    has_name = ("상호" in header_join) or ("상호명" in header_join) or ("판매점" in header_join)
+    has_addr = ("소재지" in header_join) or ("주소" in header_join)
+    has_method = ("구분" in header_join) or ("선택" in header_join)
 
-    # fallback: 보통 구조가 [번호, 상호, (구분), 소재지, ...]
-    if idx_name is None:
-        idx_name = 1
-    if idx_addr is None:
-        idx_addr = 3 if (idx_method is not None) else 2
+    score = 0
+    score += min(len(data_rows), 50)               # 행이 많을수록
+    score += 20 if max_cols >= 4 else 0            # 1등 테이블 후보
+    score += 10 if max_cols == 3 else 0            # 2등 테이블 후보(대개 3열)
+    score += 10 if has_name else 0
+    score += 10 if has_addr else 0
+    score += 5 if has_method else 0
 
-    rows: List[StoreRow] = []
+    return {
+        "score": score,
+        "data_rows": data_rows,
+        "max_cols": max_cols,
+        "has_method": has_method,
+        "headers": ths,
+    }
+
+
+def _parse_rank1_from_table(table, round_no: int) -> List[StoreRow]:
+    rows = []
     for tr in table.find_all("tr"):
         tds = tr.find_all("td")
-        if not tds:
+        if len(tds) < 4:
             continue
-
-        def safe_td(i: int) -> str:
-            if 0 <= i < len(tds):
-                return re.sub(r"\s+", " ", tds[i].get_text(" ", strip=True)).strip()
-            return ""
-
-        store_name = safe_td(idx_name)
-        method = safe_td(idx_method) if idx_method is not None else ""
-        address = safe_td(idx_addr)
-
-        if not store_name and not address:
+        store_name = _text(tds[1])
+        method = _text(tds[2])
+        address = _text(tds[3])
+        if not store_name or not address:
             continue
-
         sido, sigungu = normalize_region_from_address(address)
-
-        rows.append(
-            StoreRow(
-                round=round_no,
-                rank=rank,
-                store_name=store_name,
-                method=method,
-                address=address,
-                sido=sido,
-                sigungu=sigungu,
-            )
-        )
-
+        rows.append(StoreRow(round_no, 1, store_name, method, address, sido, sigungu))
     return rows
 
 
-def parse_rank_tables(html: str, round_no: int, include_rank2: bool) -> List[StoreRow]:
+def _parse_rank2_from_table(table, round_no: int, limit: Optional[int]) -> List[StoreRow]:
+    rows = []
+    for tr in table.find_all("tr"):
+        tds = tr.find_all("td")
+        # 2등은 보통 [번호, 상호명, 소재지, ...] 형태가 많음
+        if len(tds) < 3:
+            continue
+        store_name = _text(tds[1])
+        # 주소는 2 또는 3번 인덱스에 있을 수 있어 유연하게
+        cand_addrs = []
+        cand_addrs.append(_text(tds[2]))
+        if len(tds) >= 4:
+            cand_addrs.append(_text(tds[3]))
+        address = next((a for a in cand_addrs if a), "")
+        if not store_name or not address:
+            continue
+        sido, sigungu = normalize_region_from_address(address)
+        rows.append(StoreRow(round_no, 2, store_name, "", address, sido, sigungu))
+        if limit is not None and len(rows) >= limit:
+            break
+    return rows
+
+
+def parse_rank_tables(html: str, round_no: int, include_rank2: bool, rank2_limit: Optional[int]) -> List[StoreRow]:
     soup = BeautifulSoup(html, "lxml")
+    tables = soup.find_all("table")
+    if not tables:
+        return []
+
+    # 모든 테이블을 점수화
+    scored = []
+    for t in tables:
+        info = _score_table(t)
+        if info["max_cols"] >= 3 and info["score"] >= 20:
+            scored.append((info["score"], info["max_cols"], info["has_method"], t, info))
+
+    if not scored:
+        return []
+
+    # 점수순 정렬
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    # 1등: "4열 이상"이면서 method(구분) 신호가 있거나, 점수가 가장 높은 4열 테이블
+    rank1_table = None
+    for _, max_cols, has_method, t, _info in scored:
+        if max_cols >= 4 and has_method:
+            rank1_table = t
+            break
+    if rank1_table is None:
+        for _, max_cols, _has_method, t, _info in scored:
+            if max_cols >= 4:
+                rank1_table = t
+                break
 
     out: List[StoreRow] = []
+    if rank1_table is not None:
+        out.extend(_parse_rank1_from_table(rank1_table, round_no))
 
-    # 1등
-    t1 = _find_table_by_label(soup, r"1\s*등\s*배출점")
-    if t1 is None:
-        # fallback: "구분" 헤더 포함 table을 1등으로 가정
-        for cand in soup.find_all("table"):
-            ths = [th.get_text(" ", strip=True) for th in cand.find_all("th")]
-            if any("구분" in t for t in ths):
-                t1 = cand
-                break
-    if t1 is not None:
-        out.extend(_parse_table_rows_generic(t1, round_no, rank=1))
-
-    # 2등
+    # 2등: "3열 이상" 테이블 중에서 rank1과 다른 테이블을 후보로 선택
     if include_rank2:
-        t2 = _find_table_by_label(soup, r"2\s*등\s*배출점")
-        if t2 is not None:
-            out.extend(_parse_table_rows_generic(t2, round_no, rank=2))
+        rank2_table = None
+        for _, max_cols, _has_method, t, _info in scored:
+            if t is rank1_table:
+                continue
+            if max_cols >= 3:
+                rank2_table = t
+                break
+        if rank2_table is not None:
+            out.extend(_parse_rank2_from_table(rank2_table, round_no, rank2_limit))
 
     return out
 
 
-def update_winner_stores(range_n: int, include_rank2: bool) -> Dict:
+def update_winner_stores(range_n: int, include_rank2: bool, rank2_limit: Optional[int]) -> Dict:
     latest = get_latest_round()
     start = max(1, latest - range_n + 1)
 
     all_rows: List[StoreRow] = []
     failures: List[Dict] = []
 
+    stats = {
+        "requestedRounds": range_n,
+        "startRound": start,
+        "endRound": latest,
+        "parsedRounds": 0,
+        "rank1Rows": 0,
+        "rank2Rows": 0,
+    }
+
     for drw_no in range(start, latest + 1):
         url = TOPSTORE_URL.format(drwNo=drw_no)
         try:
-            resp = http_get(url, timeout=25, retries=3, sleep_sec=0.8)
-            html = decode_korean_html(resp)
+            resp = http_get(url)
+            html = decode_html(resp)
 
-            rows = parse_rank_tables(html, drw_no, include_rank2=include_rank2)
+            rows = parse_rank_tables(html, drw_no, include_rank2=include_rank2, rank2_limit=rank2_limit)
             if not rows:
                 failures.append({"round": drw_no, "reason": "No table parsed"})
-            all_rows.extend(rows)
+            else:
+                stats["parsedRounds"] += 1
+                stats["rank1Rows"] += sum(1 for r in rows if r.rank == 1)
+                stats["rank2Rows"] += sum(1 for r in rows if r.rank == 2)
 
+            all_rows.extend(rows)
             time.sleep(0.25)
         except Exception as e:
             failures.append({"round": drw_no, "reason": str(e)})
 
-    # ------- flat maps (호환) -------
-    by_round_flat: Dict[str, List[Dict]] = {}
-    by_region_flat: Dict[str, List[Dict]] = {}
+    by_round: Dict[str, List[Dict]] = {}
+    by_region: Dict[str, List[Dict]] = {}
 
     for r in all_rows:
         item = {
             "round": r.round,
             "rank": r.rank,
             "storeName": r.store_name,
-            "method": r.method,  # 2등은 보통 ""
+            "method": r.method,
             "address": r.address,
             "sido": r.sido,
             "sigungu": r.sigungu,
         }
-        by_round_flat.setdefault(str(r.round), []).append(item)
+        by_round.setdefault(str(r.round), []).append(item)
 
         region_key = r.sido or "기타"
-        by_region_flat.setdefault(region_key, []).append(
+        by_region.setdefault(region_key, []).append(
             {
                 "round": r.round,
                 "rank": r.rank,
@@ -301,44 +335,8 @@ def update_winner_stores(range_n: int, include_rank2: bool) -> Dict:
             }
         )
 
-    for k in by_region_flat:
-        by_region_flat[k].sort(key=lambda x: x["round"], reverse=True)
-
-    # ------- ranked maps (편의) -------
-    by_round_ranked: Dict[str, Dict[str, List[Dict]]] = {}
-    by_region_ranked: Dict[str, Dict[str, List[Dict]]] = {}
-
-    for r in all_rows:
-        rr = str(r.round)
-        rk = str(r.rank)
-
-        by_round_ranked.setdefault(rr, {}).setdefault(rk, []).append(
-            {
-                "round": r.round,
-                "rank": r.rank,
-                "storeName": r.store_name,
-                "method": r.method,
-                "address": r.address,
-                "sido": r.sido,
-                "sigungu": r.sigungu,
-            }
-        )
-
-        region_key = r.sido or "기타"
-        by_region_ranked.setdefault(region_key, {}).setdefault(rk, []).append(
-            {
-                "round": r.round,
-                "rank": r.rank,
-                "storeName": r.store_name,
-                "method": r.method,
-                "address": r.address,
-                "sigungu": r.sigungu,
-            }
-        )
-
-    for region_key in by_region_ranked:
-        for rk in by_region_ranked[region_key]:
-            by_region_ranked[region_key][rk].sort(key=lambda x: x["round"], reverse=True)
+    for k in by_region:
+        by_region[k].sort(key=lambda x: x["round"], reverse=True)
 
     now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -348,19 +346,17 @@ def update_winner_stores(range_n: int, include_rank2: bool) -> Dict:
             "range": range_n,
             "latestRound": latest,
             "includeRank2": bool(include_rank2),
+            "rank2Limit": rank2_limit,
             "source": {
                 "topStoreUrlTemplate": TOPSTORE_URL,
                 "byWinUrl": BYWIN_URL,
                 "lottoApiUrlTemplate": LOTTO_API_URL,
             },
+            "stats": stats,
             "failures": failures,
         },
-        # 호환(flat)
-        "byRound": by_round_flat,
-        "byRegion": by_region_flat,
-        # 편의(ranked)
-        "byRoundRanked": by_round_ranked,
-        "byRegionRanked": by_region_ranked,
+        "byRound": by_round,
+        "byRegion": by_region,
     }
 
 
@@ -368,20 +364,33 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--range", type=int, default=int(os.getenv("WINNER_STORES_RANGE", "10")))
     parser.add_argument("--out", type=str, default="data/winner_stores.json")
-    # 기본: 2등 포함(원하면 --no-rank2로 끌 수 있음)
-    parser.add_argument("--no-rank2", action="store_true", help="Do not include rank2 store list")
+    parser.add_argument("--no-rank2", action="store_true")
+    parser.add_argument(
+        "--rank2-limit",
+        type=int,
+        default=int(os.getenv("WINNER_STORES_RANK2_LIMIT", "0")),
+        help="0 means no limit. Example: 50",
+    )
     args = parser.parse_args()
 
-    data = update_winner_stores(args.range, include_rank2=(not args.no_rank2))
+    rank2_limit = None if (args.rank2_limit == 0) else args.rank2_limit
+
+    data = update_winner_stores(
+        range_n=args.range,
+        include_rank2=(not args.no_rank2),
+        rank2_limit=rank2_limit,
+    )
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
     print(f"[OK] wrote: {args.out}")
+    s = data["meta"]["stats"]
     print(
         f"      latestRound={data['meta']['latestRound']} range={data['meta']['range']} "
-        f"includeRank2={data['meta']['includeRank2']} failures={len(data['meta']['failures'])}"
+        f"parsedRounds={s['parsedRounds']} rank1Rows={s['rank1Rows']} rank2Rows={s['rank2Rows']} "
+        f"failures={len(data['meta']['failures'])}"
     )
 
 
