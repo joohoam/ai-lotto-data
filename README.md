@@ -1,125 +1,90 @@
-ai-lotto-data
+# ai-lotto-data
 
-AI LOTTO TRACKER 앱에서 사용하는 **원격 JSON 데이터(번호 히트맵 / 2~5등 상금 정보 / 1~2등 당첨지역)**를 GitHub Actions로 자동 생성·갱신하는 데이터 저장소입니다.
+동행복권(로또 6/45) 공개 데이터 및 웹 페이지 정보를 기반으로, 앱(예: AI LOTTO TRACKER)에서 사용할 수 있는 JSON 데이터를 자동 생성/갱신하는 리포지토리입니다.
 
-데이터는 data/*.json에 생성됩니다.
+- GitHub Actions 스케줄 실행으로 최신 데이터를 수집합니다.
+- 생성된 JSON은 `raw.githubusercontent.com` 주소로 앱에서 직접 로딩할 수 있습니다.
 
-앱에서는 GitHub Raw URL로 JSON을 fetch하여 사용합니다.
+---
 
-네트워크 실패 시에도 앱이 크래시하지 않도록 앱 측에서 캐싱을 권장합니다.
+## Output JSON (data/)
 
-제공 데이터 (Outputs)
-1) 번호 히트맵 (최근 N회)
+| File | Description |
+|---|---|
+| `data/heatmap.json` | 번호 히트맵/빈도 분석용 데이터 |
+| `data/prize_2to5.json` | 2~5등 당첨금/당첨자 수(회차별) |
+| `data/region_1to2.json` | 지역별 1~2등 당첨자(판매점) 집계 데이터 |
+| `data/winner_stores.json` | 1등 배출점 상세(상호/자동·수동/주소) 목록 (최근 N회) |
 
-파일: data/heatmap.json
+---
 
-용도: 최근 N회(기본 40회/설정값) 기준 1~45 번호 출현 빈도
+## Raw JSON URLs (for app)
 
-Raw URL:
+아래 URL을 앱에서 HTTP로 로드하세요.
 
+```txt
 https://raw.githubusercontent.com/joohoam/ai-lotto-data/main/data/heatmap.json
-
-2) 2~5등 상금 정보
-
-파일: data/prize_2to5.json
-
-용도: 회차별 2~5등 (총상금/당첨자수/1게임당 상금/기준)
-
-Raw URL:
-
 https://raw.githubusercontent.com/joohoam/ai-lotto-data/main/data/prize_2to5.json
-
-3) 1~2등 당첨지역 (시/도 + 인터넷)
-
-파일: data/region_1to2.json
-
-용도: 회차별 1등/2등 판매점 지역 집계(시/도 + 인터넷/기타)
-
-Raw URL:
-
 https://raw.githubusercontent.com/joohoam/ai-lotto-data/main/data/region_1to2.json
+https://raw.githubusercontent.com/joohoam/ai-lotto-data/main/data/winner_stores.json
+How it works
+GitHub Actions가 스케줄에 따라 실행됩니다.
 
-폴더 구조
-.
-├─ .github/
-│  └─ workflows/
-│     └─ update_lotto_data.yml      # 자동 갱신 워크플로우
-├─ scripts/
-│  ├─ requirements.txt             # Python deps
-│  ├─ update_heatmap.py            # heatmap.json 생성/갱신
-│  ├─ update_prize_2to5.py         # prize_2to5.json 생성/갱신
-│  └─ update_region_1to2.py        # region_1to2.json 생성/갱신
-└─ data/
-   ├─ heatmap.json
-   ├─ prize_2to5.json
-   └─ region_1to2.json
+scripts/*.py가 동행복권 API/페이지를 통해 데이터를 수집합니다.
 
-동작 방식
+결과물을 data/*.json으로 저장하고 변경사항이 있으면 커밋/푸시합니다.
 
-GitHub Actions가 정해진 스케줄에 따라 다음을 수행합니다.
+Scripts (scripts/)
+Script	Purpose
+scripts/update_heatmap.py	히트맵 데이터 갱신
+scripts/update_prize_2to5.py	2~5등 데이터 갱신
+scripts/update_region_1to2.py	지역별 1~2등 집계 갱신
+scripts/update_winner_stores.py	1등 배출점(상세) 크롤링/정규화 갱신
 
-Python 실행 환경 구성
-
-scripts/requirements.txt 설치
-
-scripts/update_*.py 실행 → data/*.json 갱신
-
-변경 사항이 있으면 자동 commit & push
-
-실행 주기 (Schedule)
-
-워크플로우는 다음 시간에 실행되도록 설정되어 있습니다.
-
-매주 토요일 21:05 KST
-
-매주 토요일 21:30 KST
-
-GitHub Actions cron은 UTC 기준입니다. KST(UTC+9) 시간을 UTC로 변환해 cron을 설정합니다.
-
-로컬에서 수동 실행
-
-Python 3.11+ 권장
-
+Install dependencies
+bash
+코드 복사
 pip install -r scripts/requirements.txt
+Run locally
+bash
+코드 복사
+# heatmap
 python scripts/update_heatmap.py
+
+# prize (2~5)
 python scripts/update_prize_2to5.py
-python scripts/update_region_1to2.py
 
-데이터 스키마 개요
-heatmap.json
+# region (1~2) - 최근 N회는 env로 제어
+REGION_RANGE=10 python scripts/update_region_1to2.py
 
-meta.latestRound: 최신 회차
+# winner stores (1등 배출점 상세) - 최근 N회
+python scripts/update_winner_stores.py --range 10 --out data/winner_stores.json
+winner_stores.json schema (summary)
+meta
 
-meta.range: 최근 집계 회수(N회)
+updatedAt: UTC ISO8601
 
-counts: "1" ~ "45" 번호별 출현 횟수
+latestRound: 최신 회차
 
-prize_2to5.json
+range: 최근 몇 회차 수집했는지
 
-최상위 키: 회차 문자열 "1202" 등
+failures: 특정 회차 파싱 실패 기록(디버깅용)
 
-하위 키: "2", "3", "4", "5"
+byRegion
 
-값: totalPrize, winners, perGamePrize, criteria
+"서울", "경기", "부산" 등 지역 키 → 배출점 배열
 
-region_1to2.json
+byRound
 
-meta.latestRound, meta.range, meta.updatedAt
+"1203" 같은 회차 키 → 배출점 배열
 
-rounds[회차].rank1 / rank2
+Disclaimer
+본 데이터는 공개 정보를 기반으로 가공/제공됩니다.
 
-totalStores
+동행복권 사이트/공개 API 정책 및 제공 형식 변경에 따라 수집/구조가 바뀔 수 있습니다.
 
-bySido (서울~제주)
+본 데이터는 참고용이며, 당첨을 보장하지 않습니다.
 
-internet, other
-
-Notes
-
-데이터 소스는 동행복권 공개 페이지/응답을 기반으로 합니다.
-
-사이트 구조 변경 등으로 파싱이 실패할 수 있으며, 이 경우 워크플로우 로그를 확인해 스크립트를 업데이트해야 합니다.
-
-
-## License
-No license. All rights reserved.
+asciidoc
+코드 복사
+::contentReference[oaicite:0]{index=0}
