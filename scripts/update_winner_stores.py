@@ -1,19 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""
-Update Lotto 6/45 winner stores (1st prize outlets) for the latest N rounds.
-
-- Source page (by round): https://dhlottery.co.kr/store.do?method=topStore&pageGubun=L645&drwNo=XXXX
-  Contains both 1st and 2nd prize sections. We parse the "1등 배출점" table (includes "구분" column).
-  :contentReference[oaicite:2]{index=2}
-
-- Latest round discovery:
-  1) Try parsing byWin page: https://dhlottery.co.kr/gameResult.do?method=byWin  :contentReference[oaicite:3]{index=3}
-  2) Fallback: probe common.do API with binary search:
-     https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=903 :contentReference[oaicite:4]{index=4}
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -28,7 +15,6 @@ from typing import Dict, List, Optional, Tuple
 import requests
 from bs4 import BeautifulSoup
 
-
 BYWIN_URL = "https://dhlottery.co.kr/gameResult.do?method=byWin"
 LOTTO_API_URL = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={drwNo}"
 TOPSTORE_URL = "https://dhlottery.co.kr/store.do?method=topStore&pageGubun=L645&drwNo={drwNo}"
@@ -42,10 +28,7 @@ DEFAULT_HEADERS = {
 }
 
 
-# -------------------------
-# Helpers: HTTP
-# -------------------------
-def http_get(url: str, timeout: int = 20, retries: int = 3, sleep_sec: float = 0.5) -> requests.Response:
+def http_get(url: str, timeout: int = 20, retries: int = 3, sleep_sec: float = 0.6) -> requests.Response:
     last_exc = None
     for i in range(retries):
         try:
@@ -60,43 +43,26 @@ def http_get(url: str, timeout: int = 20, retries: int = 3, sleep_sec: float = 0
 
 
 def decode_korean_html(resp: requests.Response) -> str:
-    """
-    dhlottery pages may not declare encoding consistently.
-    Force a reasonable decoding strategy.
-    """
-    # requests sometimes sets ISO-8859-1 by default when no charset is declared
     enc = (resp.encoding or "").lower().strip()
     if not enc or enc in ("iso-8859-1", "latin-1"):
-        # Most of dhlottery pages are EUC-KR or UTF-8; use apparent_encoding first
         resp.encoding = resp.apparent_encoding or "euc-kr"
     try:
         return resp.text
     except Exception:
-        # last resort
         return resp.content.decode("euc-kr", errors="replace")
 
 
-# -------------------------
-# Latest round discovery
-# -------------------------
 def get_latest_round_from_bywin() -> Optional[int]:
-    """
-    Try to parse latest drwNo from byWin page HTML.
-    """
     html = decode_korean_html(http_get(BYWIN_URL))
-    # Common patterns seen: lottoDrwNo=1234 or id="lottoDrwNo" value="1234"
     m = re.search(r"lottoDrwNo\s*=\s*(\d+)", html)
     if m:
         return int(m.group(1))
     m = re.search(r'id=["\']lottoDrwNo["\'][^>]*value=["\'](\d+)["\']', html)
     if m:
         return int(m.group(1))
-
-    # Some pages include "회 당첨결과" near the top
     m = re.search(r"(\d+)\s*회\s*당첨결과", html)
     if m:
         return int(m.group(1))
-
     return None
 
 
@@ -108,23 +74,14 @@ def lotto_api_success(drw_no: int) -> bool:
 
 
 def find_latest_round_by_api(max_hint: int = 2000) -> int:
-    """
-    Fallback method:
-    - Exponential search up to find an upper bound where API fails
-    - Binary search to find last success
-    """
     lo = 1
     hi = max_hint
-
-    # If max_hint still succeeds, expand
     while lotto_api_success(hi):
         lo = hi
         hi *= 2
         if hi > 10000:
-            # sanity bound
             break
 
-    # Now binary search (lo success, hi maybe fail)
     left = lo
     right = hi
     while left + 1 < right:
@@ -133,7 +90,6 @@ def find_latest_round_by_api(max_hint: int = 2000) -> int:
             left = mid
         else:
             right = mid
-
     return left
 
 
@@ -144,9 +100,6 @@ def get_latest_round() -> int:
     return find_latest_round_by_api()
 
 
-# -------------------------
-# Parsing / Normalization
-# -------------------------
 @dataclass
 class StoreRow:
     round: int
@@ -159,66 +112,40 @@ class StoreRow:
 
 
 _SIDO_ALIASES = {
-    "서울특별시": "서울",
-    "서울시": "서울",
-    "서울": "서울",
-    "부산광역시": "부산",
-    "부산": "부산",
-    "대구광역시": "대구",
-    "대구": "대구",
-    "인천광역시": "인천",
-    "인천": "인천",
-    "광주광역시": "광주",
-    "광주": "광주",
-    "대전광역시": "대전",
-    "대전": "대전",
-    "울산광역시": "울산",
-    "울산": "울산",
-    "세종특별자치시": "세종",
-    "세종": "세종",
-    "경기도": "경기",
-    "경기": "경기",
-    "강원특별자치도": "강원",
-    "강원도": "강원",
-    "강원": "강원",
-    "충청북도": "충북",
-    "충북": "충북",
-    "충청남도": "충남",
-    "충남": "충남",
-    "전라북도": "전북",
-    "전북": "전북",
-    "전라남도": "전남",
-    "전남": "전남",
-    "경상북도": "경북",
-    "경북": "경북",
-    "경상남도": "경남",
-    "경남": "경남",
-    "제주특별자치도": "제주",
-    "제주도": "제주",
-    "제주": "제주",
+    "서울특별시": "서울", "서울시": "서울", "서울": "서울",
+    "부산광역시": "부산", "부산": "부산",
+    "대구광역시": "대구", "대구": "대구",
+    "인천광역시": "인천", "인천": "인천",
+    "광주광역시": "광주", "광주": "광주",
+    "대전광역시": "대전", "대전": "대전",
+    "울산광역시": "울산", "울산": "울산",
+    "세종특별자치시": "세종", "세종": "세종",
+    "경기도": "경기", "경기": "경기",
+    "강원특별자치도": "강원", "강원도": "강원", "강원": "강원",
+    "충청북도": "충북", "충북": "충북",
+    "충청남도": "충남", "충남": "충남",
+    "전라북도": "전북", "전북": "전북",
+    "전라남도": "전남", "전남": "전남",
+    "경상북도": "경북", "경북": "경북",
+    "경상남도": "경남", "경남": "경남",
+    "제주특별자치도": "제주", "제주도": "제주", "제주": "제주",
 }
 
 
 def normalize_region_from_address(address: str) -> Tuple[str, str]:
-    """
-    Extract sido/sigungu from a Korean address.
-    For online sales (e.g. '동행복권(dhlottery.co.kr)'), return ('온라인', '').
-    """
     addr = (address or "").strip()
     if not addr:
         return "", ""
 
-    # Online / website
     if "dhlottery.co.kr" in addr or "인터넷" in addr:
         return "온라인", ""
 
-    # Typical: "서울 강남구 ..." or "경기 성남시 ..."
     parts = addr.split()
     if not parts:
         return "", ""
 
     first = parts[0]
-    sido = _SIDO_ALIASES.get(first, first)  # keep as-is if unknown
+    sido = _SIDO_ALIASES.get(first, first)
     sigungu = parts[1] if len(parts) >= 2 else ""
     return sido, sigungu
 
@@ -226,7 +153,7 @@ def normalize_region_from_address(address: str) -> Tuple[str, str]:
 def parse_first_prize_table(html: str, round_no: int) -> List[StoreRow]:
     soup = BeautifulSoup(html, "lxml")
 
-    # Find the "1등 배출점" label, then its next table
+    # "1등 배출점" 라벨 주변의 table을 우선 탐색
     table = None
     label_nodes = soup.find_all(string=re.compile(r"1\s*등\s*배출점"))
     for node in label_nodes:
@@ -235,13 +162,12 @@ def parse_first_prize_table(html: str, round_no: int) -> List[StoreRow]:
             continue
         cand = parent.find_next("table")
         if cand and cand.find_all("th"):
-            # Prefer table containing "구분" header
             th_texts = [th.get_text(strip=True) for th in cand.find_all("th")]
             if any("구분" in t for t in th_texts):
                 table = cand
                 break
 
-    # Fallback: choose the first table that contains a "구분" header
+    # fallback: "구분" 헤더 포함 table 찾기
     if table is None:
         for cand in soup.find_all("table"):
             th_texts = [th.get_text(strip=True) for th in cand.find_all("th")]
@@ -258,15 +184,10 @@ def parse_first_prize_table(html: str, round_no: int) -> List[StoreRow]:
         if len(tds) < 4:
             continue
 
-        # Expected columns for 1등: 번호 | 상호명 | 구분 | 소재지 | 위치보기(옵션)
-        store_name = tds[1].get_text(" ", strip=True)
-        method = tds[2].get_text(" ", strip=True)
-        address = tds[3].get_text(" ", strip=True)
-
-        # Clean up
-        store_name = re.sub(r"\s+", " ", store_name).strip()
-        method = re.sub(r"\s+", " ", method).strip()
-        address = re.sub(r"\s+", " ", address).strip()
+        # 기대 컬럼: 번호 | 상호 | 구분(자동/수동) | 소재지 | (위치보기)
+        store_name = re.sub(r"\s+", " ", tds[1].get_text(" ", strip=True)).strip()
+        method = re.sub(r"\s+", " ", tds[2].get_text(" ", strip=True)).strip()
+        address = re.sub(r"\s+", " ", tds[3].get_text(" ", strip=True)).strip()
 
         sido, sigungu = normalize_region_from_address(address)
 
@@ -295,20 +216,18 @@ def update_winner_stores(range_n: int) -> Dict:
     for drw_no in range(start, latest + 1):
         url = TOPSTORE_URL.format(drwNo=drw_no)
         try:
-            resp = http_get(url, timeout=25, retries=3, sleep_sec=0.6)
+            resp = http_get(url, timeout=25, retries=3, sleep_sec=0.8)
             html = decode_korean_html(resp)
             rows = parse_first_prize_table(html, drw_no)
 
-            # Even if rows empty, keep record for debugging
             if not rows:
                 failures.append({"round": drw_no, "reason": "No 1st-prize table parsed"})
             all_rows.extend(rows)
 
-            time.sleep(0.25)  # polite delay
+            time.sleep(0.25)
         except Exception as e:
             failures.append({"round": drw_no, "reason": str(e)})
 
-    # Build by_round
     by_round: Dict[str, List[Dict]] = {}
     for r in all_rows:
         by_round.setdefault(str(r.round), []).append(
@@ -323,7 +242,6 @@ def update_winner_stores(range_n: int) -> Dict:
             }
         )
 
-    # Build by_region (latest range only)
     by_region: Dict[str, List[Dict]] = {}
     for r in all_rows:
         key = r.sido or "기타"
@@ -338,7 +256,6 @@ def update_winner_stores(range_n: int) -> Dict:
             }
         )
 
-    # Sort each region list by round desc
     for key in list(by_region.keys()):
         by_region[key].sort(key=lambda x: x["round"], reverse=True)
 
@@ -354,7 +271,7 @@ def update_winner_stores(range_n: int) -> Dict:
                 "byWinUrl": BYWIN_URL,
                 "lottoApiUrlTemplate": LOTTO_API_URL,
             },
-            "failures": failures,  # keep for transparency (can be removed if you prefer)
+            "failures": failures,
         },
         "byRound": by_round,
         "byRegion": by_region,
@@ -363,7 +280,12 @@ def update_winner_stores(range_n: int) -> Dict:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--range", type=int, default=10, help="Number of latest rounds to fetch (default: 10)")
+    parser.add_argument(
+        "--range",
+        type=int,
+        default=int(os.getenv("WINNER_STORES_RANGE", "10")),
+        help="Latest N rounds (default: WINNER_STORES_RANGE or 10)",
+    )
     parser.add_argument("--out", type=str, default="data/winner_stores.json", help="Output JSON path")
     args = parser.parse_args()
 
@@ -374,8 +296,11 @@ def main():
         json.dump(data, f, ensure_ascii=False, indent=2)
 
     print(f"[OK] wrote: {args.out}")
-    print(f"      latestRound={data['meta']['latestRound']} range={data['meta']['range']} failures={len(data['meta']['failures'])}")
+    print(
+        f"      latestRound={data['meta']['latestRound']} range={data['meta']['range']} "
+        f"failures={len(data['meta']['failures'])}"
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
