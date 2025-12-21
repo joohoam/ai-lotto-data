@@ -1,4 +1,4 @@
-name: Update lotto data (heatmap + prize 2~5 + region 1~2)
+name: Update lotto data (heatmap + prize 2~5 + region 1~2 + winner stores)
 
 on:
   workflow_dispatch:
@@ -53,8 +53,9 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
 
-          # ✅ 매주 최신 40회 전체 재수집
-          REGION_RANGE: "40"
+          # ✅ 모든 작업: 최신 10회만
+          REGION_RANGE: "10"
+          WINNER_STORES_RANGE: "10"
 
           # ✅ 안정성/속도 튜닝(필요 시 조정)
           REGION_TIMEOUT: "25"
@@ -95,6 +96,9 @@ jobs:
           echo "==> update_region_1to2.py (REGION_RANGE=$REGION_RANGE)"
           retry python -u scripts/update_region_1to2.py
 
+          echo "==> update_winner_stores.py (range=$WINNER_STORES_RANGE)"
+          retry python -u scripts/update_winner_stores.py --range "$WINNER_STORES_RANGE" --out data/winner_stores.json
+
       - name: Validate generated files (non-empty)
         shell: bash
         run: |
@@ -102,6 +106,7 @@ jobs:
           test -s data/heatmap.json
           test -s data/prize_2to5.json
           test -s data/region_1to2.json
+          test -s data/winner_stores.json
 
       - name: Validate latest round consistency (region rank2 == prize winners)
         shell: bash
@@ -142,6 +147,26 @@ jobs:
           print(f"OK: latest {latest} rank2 totalStores={got} matches prize winners={expected}")
           PY
 
+      - name: Validate winner_stores latestRound matches region latestRound
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, sys
+
+          region = json.load(open("data/region_1to2.json", encoding="utf-8"))
+          ws = json.load(open("data/winner_stores.json", encoding="utf-8"))
+
+          r_latest = int(region["meta"]["latestRound"])
+          w_latest = int(ws["meta"]["latestRound"])
+
+          if r_latest != w_latest:
+            print(f"ERROR: latestRound mismatch. region={r_latest}, winner_stores={w_latest}")
+            sys.exit(1)
+
+          print(f"OK: latestRound matches: {r_latest}")
+          PY
+
       - name: Commit & push if changed
         shell: bash
         env:
@@ -159,7 +184,7 @@ jobs:
             exit 0
           fi
 
-          git commit -m "Update lotto data"
+          git commit -m "Update lotto data (latest 10)"
 
           for i in 1 2 3; do
             if git push origin "HEAD:$BRANCH"; then
