@@ -10,7 +10,7 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple, Set
+from typing import Dict, List, Optional, Tuple
 
 import requests
 from bs4 import BeautifulSoup
@@ -21,9 +21,6 @@ from bs4 import BeautifulSoup
 BYWIN_URL = "https://dhlottery.co.kr/gameResult.do?method=byWin"
 LOTTO_API_URL = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={drwNo}"
 
-# topStore (회차별 당첨 판매점)
-# 페이지 1은 GET로도 접근 가능하지만, 2등 페이지네이션은 POST nowPage로 동작하는 경우가 많아
-# GET(1페이지) + POST(2페이지~) 혼합을 지원합니다.
 TOPSTORE_BASE_URL = "https://dhlottery.co.kr/store.do"
 TOPSTORE_GET_URL = "https://dhlottery.co.kr/store.do?method=topStore&pageGubun=L645&drwNo={drwNo}"
 
@@ -35,8 +32,9 @@ DEFAULT_HEADERS = {
     "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.7,en;q=0.6",
 }
 
+
 # -----------------------------
-# Helpers: HTTP
+# HTTP helpers
 # -----------------------------
 def http_get(session: requests.Session, url: str, timeout: int = 25, retries: int = 4, backoff: float = 0.8) -> requests.Response:
     last = None
@@ -58,7 +56,6 @@ def http_post(session: requests.Session, url: str, data: dict, timeout: int = 25
         try:
             headers = dict(DEFAULT_HEADERS)
             headers["Content-Type"] = "application/x-www-form-urlencoded"
-            # referer 힌트
             headers["Referer"] = "https://dhlottery.co.kr/store.do?method=topStore&pageGubun=L645"
             r = session.post(url, headers=headers, data=data, timeout=timeout)
             r.raise_for_status()
@@ -71,7 +68,6 @@ def http_post(session: requests.Session, url: str, data: dict, timeout: int = 25
 
 
 def decode_html(resp: requests.Response) -> str:
-    # 동행복권 페이지는 EUC-KR/UTF-8 혼재 가능성 → 보수적으로 처리
     enc = (resp.encoding or "").lower().strip()
     if not enc or enc in ("iso-8859-1", "latin-1"):
         guess = (resp.apparent_encoding or "").lower().strip()
@@ -135,11 +131,11 @@ def get_latest_round(session: requests.Session) -> int:
 # Models / Normalization
 # -----------------------------
 @dataclass
-class StoreRow:
+class RawRow:
     round: int
-    rank: int  # 1 or 2
+    rank: int
     store_name: str
-    method: str  # 1등: 자동/수동, 2등: 보통 ""
+    method: str
     address: str
     sido: str
     sigungu: str
@@ -185,39 +181,40 @@ def t(el) -> str:
 
 
 # -----------------------------
-# Parsing tables (robust)
+# Table picking & parsing
 # -----------------------------
 def pick_rank1_table(soup: BeautifulSoup):
-    # 1등 테이블은 보통 header에 "구분"이 있음
-    candidates = []
+    # 1등 테이블은 보통 "구분"이 들어있음
+    best = None
+    best_rows = -1
     for table in soup.find_all("table"):
-        headers = [t(th) for th in table.find_all("th")]
-        header_join = " ".join(headers)
-        if "구분" in header_join and ("상호" in header_join or "판매점" in header_join):
-            # 데이터 행 수 기준으로 가장 큰 테이블을 선택
+        headers = " ".join([t(th) for th in table.find_all("th")])
+        if "구분" in headers and ("상호" in headers or "판매점" in headers):
             data_rows = [tr for tr in table.find_all("tr") if len(tr.find_all("td")) >= 4]
-            candidates.append((len(data_rows), table))
-    candidates.sort(key=lambda x: x[0], reverse=True)
-    return candidates[0][1] if candidates else None
+            if len(data_rows) > best_rows:
+                best_rows = len(data_rows)
+                best = table
+    return best
 
 
 def pick_rank2_table(soup: BeautifulSoup):
-    # 2등 테이블은 보통 header에 "상호" + ("소재지" or "주소") 있고 "구분"은 없음
-    candidates = []
+    # 2등 테이블은 보통 "상호" + ("소재지" or "주소") 있고 "구분"은 없음
+    best = None
+    best_rows = -1
     for table in soup.find_all("table"):
-        headers = [t(th) for th in table.find_all("th")]
-        header_join = " ".join(headers)
-        if ("상호" in header_join or "판매점" in header_join) and (("소재지" in header_join) or ("주소" in header_join)):
-            if "구분" in header_join:
+        headers = " ".join([t(th) for th in table.find_all("th")])
+        if ("상호" in headers or "판매점" in headers) and (("소재지" in headers) or ("주소" in headers)):
+            if "구분" in headers:
                 continue
             data_rows = [tr for tr in table.find_all("tr") if len(tr.find_all("td")) >= 3]
-            candidates.append((len(data_rows), table))
-    candidates.sort(key=lambda x: x[0], reverse=True)
-    return candidates[0][1] if candidates else None
+            if len(data_rows) > best_rows:
+                best_rows = len(data_rows)
+                best = table
+    return best
 
 
-def parse_rank1_rows(table, round_no: int) -> List[StoreRow]:
-    out: List[StoreRow] = []
+def parse_rank1_rows(table, round_no: int) -> List[RawRow]:
+    out: List[RawRow] = []
     for tr in table.find_all("tr"):
         tds = tr.find_all("td")
         if len(tds) < 4:
@@ -228,26 +225,27 @@ def parse_rank1_rows(table, round_no: int) -> List[StoreRow]:
         if not store_name or not address:
             continue
         sido, sigungu = normalize_region_from_address(address)
-        out.append(StoreRow(round_no, 1, store_name, method, address, sido, sigungu))
+        out.append(RawRow(round_no, 1, store_name, method, address, sido, sigungu))
     return out
 
 
-def parse_rank2_rows(table, round_no: int, limit_left: Optional[int]) -> List[StoreRow]:
-    out: List[StoreRow] = []
+def parse_rank2_rows(table, round_no: int, limit_left: Optional[int]) -> List[RawRow]:
+    out: List[RawRow] = []
     for tr in table.find_all("tr"):
         tds = tr.find_all("td")
         if len(tds) < 3:
             continue
         store_name = t(tds[1])
-        # 주소 컬럼 위치가 가변적이라 2~3 중 유효한 것을 채택
+
         addr_candidates = [t(tds[2])]
         if len(tds) >= 4:
             addr_candidates.append(t(tds[3]))
         address = next((a for a in addr_candidates if a), "")
+
         if not store_name or not address:
             continue
         sido, sigungu = normalize_region_from_address(address)
-        out.append(StoreRow(round_no, 2, store_name, "", address, sido, sigungu))
+        out.append(RawRow(round_no, 2, store_name, "", address, sido, sigungu))
 
         if limit_left is not None and len(out) >= limit_left:
             break
@@ -255,13 +253,14 @@ def parse_rank2_rows(table, round_no: int, limit_left: Optional[int]) -> List[St
 
 
 # -----------------------------
-# Fetch topStore page (pagination)
+# topStore fetching (pagination)
 # -----------------------------
 def fetch_topstore_page(session: requests.Session, drw_no: int, now_page: int) -> str:
     if now_page == 1:
         url = TOPSTORE_GET_URL.format(drwNo=drw_no)
         return decode_html(http_get(session, url))
-    # 페이지 2부터는 POST nowPage로 시도 (실패하면 GET fallback도 한 번)
+
+    # POST nowPage 방식 시도
     data = {
         "method": "topStore",
         "pageGubun": "L645",
@@ -271,149 +270,137 @@ def fetch_topstore_page(session: requests.Session, drw_no: int, now_page: int) -
     try:
         return decode_html(http_post(session, TOPSTORE_BASE_URL, data=data))
     except Exception:
-        # fallback: 일부 환경에서 GET 파라미터로 nowPage가 먹는 경우도 있어 시도
+        # 일부 환경에서 GET nowPage가 먹는 경우도 있어 fallback
         url = TOPSTORE_GET_URL.format(drwNo=drw_no) + f"&nowPage={now_page}"
         return decode_html(http_get(session, url))
 
 
-def parse_round(session: requests.Session, drw_no: int, include_rank2: bool, rank2_limit: Optional[int], rank2_max_pages: int) -> Tuple[List[StoreRow], List[dict]]:
+def page_signature_rank2(rows: List[RawRow]) -> Tuple[Tuple[str, str], ...]:
     """
-    - 1등: page=1에서 한 번만 파싱
-    - 2등: page=1..N까지 반복, "새로운 정보가 없으면 멈춤"
+    페이지 반복(무한루프) 감지를 위한 시그니처.
+    - "순서 포함" 시그니처로 반복 페이지를 잡는다.
+    """
+    return tuple((r.store_name, r.address) for r in rows)
+
+
+def crawl_one_round(
+    session: requests.Session,
+    drw_no: int,
+    include_rank2: bool,
+    rank2_limit: Optional[int],
+    rank2_max_pages: int,
+) -> Tuple[List[RawRow], List[dict], dict]:
+    """
+    - 1등: page=1에서 1회 파싱
+    - 2등: page=1..N 반복
+      * 페이지에 데이터가 없으면 중단
+      * 페이지 내용이 이전 페이지와 동일(반복)이면 중단
+      * rank2_limit 도달하면 중단
     """
     failures: List[dict] = []
-    rows: List[StoreRow] = []
-    seen: Set[Tuple[int, int, str, str]] = set()  # (round, rank, name, addr)
+    raw_rows: List[RawRow] = []
 
-    # --- page 1 ---
-    html1 = fetch_topstore_page(session, drw_no, now_page=1)
+    meta_debug = {
+        "rank2PagesFetched": 0,
+        "rank2RowsFetched": 0,
+        "rank2StoppedBy": "",
+    }
+
+    # page 1
+    html1 = fetch_topstore_page(session, drw_no, 1)
     soup1 = BeautifulSoup(html1, "lxml")
 
     # rank1
     t1 = pick_rank1_table(soup1)
-    if t1 is not None:
-        r1 = parse_rank1_rows(t1, drw_no)
-        for r in r1:
-            key = (r.round, r.rank, r.store_name, r.address)
-            if key not in seen:
-                seen.add(key)
-                rows.append(r)
-    else:
+    if t1 is None:
         failures.append({"round": drw_no, "rank": 1, "page": 1, "reason": "Rank1 table not found"})
+    else:
+        raw_rows.extend(parse_rank1_rows(t1, drw_no))
 
-    # rank2 page 1
+    # rank2
     if include_rank2:
-        limit_left = None if rank2_limit is None else max(0, rank2_limit)
         t2 = pick_rank2_table(soup1)
-        if t2 is not None:
-            r2 = parse_rank2_rows(t2, drw_no, limit_left)
-            for r in r2:
-                key = (r.round, r.rank, r.store_name, r.address)
-                if key not in seen:
-                    seen.add(key)
-                    rows.append(r)
-            if rank2_limit is not None:
-                limit_left = max(0, rank2_limit - sum(1 for r in rows if r.rank == 2))
-        else:
-            # 2등이 0명인 회차도 드물지만, 대부분 존재하므로 실패로 기록
+        if t2 is None:
             failures.append({"round": drw_no, "rank": 2, "page": 1, "reason": "Rank2 table not found"})
+            return raw_rows, failures, meta_debug
 
-        # --- rank2 pagination pages ---
-        # 끝 페이지에 정보가 없으면 멈춤:
-        # - 해당 페이지에서 rank2 파싱 결과가 0이면 중단
-        # - 파싱은 됐지만 '새로 추가된 항목'이 0이면 중단 (중복/끝)
-        # - rank2_limit에 도달하면 중단
-        if include_rank2:
-            page = 2
-            while page <= rank2_max_pages:
-                if rank2_limit is not None and sum(1 for r in rows if r.rank == 2) >= rank2_limit:
-                    break
+        limit_left = None if rank2_limit is None else max(0, rank2_limit)
+        r2_page1 = parse_rank2_rows(t2, drw_no, limit_left)
+        meta_debug["rank2PagesFetched"] += 1
+        meta_debug["rank2RowsFetched"] += len(r2_page1)
 
-                htmlp = fetch_topstore_page(session, drw_no, now_page=page)
-                soup = BeautifulSoup(htmlp, "lxml")
+        if not r2_page1:
+            meta_debug["rank2StoppedBy"] = "empty_page_1"
+            return raw_rows, failures, meta_debug
 
-                t2p = pick_rank2_table(soup)
-                if t2p is None:
-                    # 페이지에 2등 테이블이 없으면 끝으로 판단
-                    break
+        raw_rows.extend(r2_page1)
 
-                current_limit_left = None
-                if rank2_limit is not None:
-                    current_limit_left = max(0, rank2_limit - sum(1 for r in rows if r.rank == 2))
+        if rank2_limit is not None:
+            got = sum(1 for r in raw_rows if r.rank == 2)
+            if got >= rank2_limit:
+                meta_debug["rank2StoppedBy"] = "limit_reached_on_page_1"
+                return raw_rows, failures, meta_debug
 
-                parsed = parse_rank2_rows(t2p, drw_no, current_limit_left)
+        prev_sig = page_signature_rank2(r2_page1)
 
-                if not parsed:
-                    # ✅ "끝에 정보가 없으면 멈춤"
-                    break
+        # page 2..N
+        page = 2
+        while page <= rank2_max_pages:
+            if rank2_limit is not None and sum(1 for r in raw_rows if r.rank == 2) >= rank2_limit:
+                meta_debug["rank2StoppedBy"] = "limit_reached"
+                break
 
-                added = 0
-                for r in parsed:
-                    key = (r.round, r.rank, r.store_name, r.address)
-                    if key not in seen:
-                        seen.add(key)
-                        rows.append(r)
-                        added += 1
+            htmlp = fetch_topstore_page(session, drw_no, page)
+            soup = BeautifulSoup(htmlp, "lxml")
 
-                if added == 0:
-                    # ✅ 새로 들어온 게 없으면 끝(중복 페이지/마지막 페이지)
-                    break
+            t2p = pick_rank2_table(soup)
+            if t2p is None:
+                meta_debug["rank2StoppedBy"] = "no_rank2_table"
+                break
 
-                page += 1
-                time.sleep(0.15)
+            limit_left = None
+            if rank2_limit is not None:
+                limit_left = max(0, rank2_limit - sum(1 for r in raw_rows if r.rank == 2))
 
-            if page > rank2_max_pages:
-                failures.append({"round": drw_no, "rank": 2, "page": rank2_max_pages, "reason": "Reached rank2_max_pages limit"})
+            r2 = parse_rank2_rows(t2p, drw_no, limit_left)
+            meta_debug["rank2PagesFetched"] += 1
+            meta_debug["rank2RowsFetched"] += len(r2)
 
-    return rows, failures
+            if not r2:
+                meta_debug["rank2StoppedBy"] = "empty_page"
+                break
+
+            sig = page_signature_rank2(r2)
+            if sig == prev_sig:
+                meta_debug["rank2StoppedBy"] = "repeated_page_signature"
+                break
+
+            raw_rows.extend(r2)
+            prev_sig = sig
+
+            page += 1
+            time.sleep(0.15)
+
+        if page > rank2_max_pages and not meta_debug["rank2StoppedBy"]:
+            meta_debug["rank2StoppedBy"] = "max_pages_guard"
+
+    return raw_rows, failures, meta_debug
 
 
 # -----------------------------
-# Build JSON
+# Aggregation: group + count
 # -----------------------------
-def build_json(range_n: int, include_rank2: bool, rank2_limit: Optional[int], rank2_max_pages: int) -> Dict:
-    with requests.Session() as session:
-        latest = get_latest_round(session)
-        start = max(1, latest - range_n + 1)
+def aggregate_rows(rows: List[RawRow]) -> List[dict]:
+    """
+    (round, rank, storeName, address)로 묶고 count 집계.
+    method는 1등 기준으로 유지(같으면 동일, 다르면 첫 값 유지).
+    """
+    m: Dict[Tuple[int, int, str, str], dict] = {}
 
-        all_rows: List[StoreRow] = []
-        failures: List[dict] = []
-
-        stats = {
-            "requestedRounds": range_n,
-            "startRound": start,
-            "endRound": latest,
-            "parsedRounds": 0,
-            "rank1Rows": 0,
-            "rank2Rows": 0,
-        }
-
-        for drw_no in range(start, latest + 1):
-            try:
-                rows, fail = parse_round(
-                    session=session,
-                    drw_no=drw_no,
-                    include_rank2=include_rank2,
-                    rank2_limit=rank2_limit,
-                    rank2_max_pages=rank2_max_pages,
-                )
-                failures.extend(fail)
-
-                if rows:
-                    stats["parsedRounds"] += 1
-                    stats["rank1Rows"] += sum(1 for r in rows if r.rank == 1)
-                    stats["rank2Rows"] += sum(1 for r in rows if r.rank == 2)
-
-                all_rows.extend(rows)
-                time.sleep(0.2)
-            except Exception as e:
-                failures.append({"round": drw_no, "reason": str(e)})
-
-        by_round: Dict[str, List[Dict]] = {}
-        by_region: Dict[str, List[Dict]] = {}
-
-        for r in all_rows:
-            item = {
+    for r in rows:
+        key = (r.round, r.rank, r.store_name, r.address)
+        if key not in m:
+            m[key] = {
                 "round": r.round,
                 "rank": r.rank,
                 "storeName": r.store_name,
@@ -421,23 +408,101 @@ def build_json(range_n: int, include_rank2: bool, rank2_limit: Optional[int], ra
                 "address": r.address,
                 "sido": r.sido,
                 "sigungu": r.sigungu,
+                "count": 1,
             }
-            by_round.setdefault(str(r.round), []).append(item)
+        else:
+            m[key]["count"] += 1
 
-            region_key = r.sido or "기타"
-            by_region.setdefault(region_key, []).append(
-                {
-                    "round": r.round,
-                    "rank": r.rank,
-                    "storeName": r.store_name,
-                    "method": r.method,
-                    "address": r.address,
-                    "sigungu": r.sigungu,
-                }
-            )
+    # 정렬: rank asc(1 먼저) + count desc + storeName
+    out = list(m.values())
+    out.sort(key=lambda x: (x["rank"], -x["count"], x["storeName"]))
+    return out
 
+
+def build_json(range_n: int, include_rank2: bool, rank2_limit: Optional[int], rank2_max_pages: int) -> Dict:
+    with requests.Session() as session:
+        latest = get_latest_round(session)
+        start = max(1, latest - range_n + 1)
+
+        failures: List[dict] = []
+        all_raw_rows: List[RawRow] = []
+
+        per_round_debug: Dict[str, dict] = {}
+
+        stats = {
+            "requestedRounds": range_n,
+            "startRound": start,
+            "endRound": latest,
+            "parsedRounds": 0,
+            "rawRank1Rows": 0,
+            "rawRank2Rows": 0,
+            "aggItems": 0,
+            "aggRank1Items": 0,
+            "aggRank2Items": 0,
+        }
+
+        for drw_no in range(start, latest + 1):
+            try:
+                rows, fail, dbg = crawl_one_round(
+                    session=session,
+                    drw_no=drw_no,
+                    include_rank2=include_rank2,
+                    rank2_limit=rank2_limit,
+                    rank2_max_pages=rank2_max_pages,
+                )
+                failures.extend(fail)
+                all_raw_rows.extend(rows)
+
+                per_round_debug[str(drw_no)] = dbg
+
+                if rows:
+                    stats["parsedRounds"] += 1
+                stats["rawRank1Rows"] += sum(1 for r in rows if r.rank == 1)
+                stats["rawRank2Rows"] += sum(1 for r in rows if r.rank == 2)
+
+                time.sleep(0.2)
+            except Exception as e:
+                failures.append({"round": drw_no, "reason": str(e)})
+
+        # 회차별 집계(byRound)
+        by_round: Dict[str, List[dict]] = {}
+        # 지역별 집계(byRegion)
+        by_region: Dict[str, List[dict]] = {}
+
+        # round별 raw rows를 모아서 aggregate
+        tmp_round: Dict[int, List[RawRow]] = {}
+        for r in all_raw_rows:
+            tmp_round.setdefault(r.round, []).append(r)
+
+        for rno, rrows in tmp_round.items():
+            agg = aggregate_rows(rrows)
+            by_round[str(rno)] = agg
+
+        # region별로는 "집계된 항목" 기준으로 다시 모으는 게 UX에 맞음
+        for rno_str, items in by_round.items():
+            for it in items:
+                region_key = it.get("sido") or "기타"
+                by_region.setdefault(region_key, []).append(
+                    {
+                        "round": it["round"],
+                        "rank": it["rank"],
+                        "storeName": it["storeName"],
+                        "method": it.get("method", ""),
+                        "address": it["address"],
+                        "sigungu": it.get("sigungu", ""),
+                        "count": it.get("count", 1),
+                    }
+                )
+
+        # region 정렬: 최신 회차 우선
         for k in by_region:
-            by_region[k].sort(key=lambda x: x["round"], reverse=True)
+            by_region[k].sort(key=lambda x: (x["round"], x["rank"], -x["count"]), reverse=True)
+
+        # stats(집계 기반)
+        all_items = [it for arr in by_round.values() for it in arr]
+        stats["aggItems"] = len(all_items)
+        stats["aggRank1Items"] = sum(1 for it in all_items if it["rank"] == 1)
+        stats["aggRank2Items"] = sum(1 for it in all_items if it["rank"] == 2)
 
         now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -456,6 +521,7 @@ def build_json(range_n: int, include_rank2: bool, rank2_limit: Optional[int], ra
                     "lottoApiUrlTemplate": LOTTO_API_URL,
                 },
                 "stats": stats,
+                "perRoundDebug": per_round_debug,
                 "failures": failures,
             },
             "byRound": by_round,
@@ -469,10 +535,10 @@ def main():
     parser.add_argument("--out", type=str, default="data/winner_stores.json")
     parser.add_argument("--no-rank2", action="store_true", help="Exclude rank2 store list")
 
-    # 2등 데이터가 너무 커지면 제한 권장 (0이면 제한 없음)
+    # 0이면 제한 없음
     parser.add_argument("--rank2-limit", type=int, default=int(os.getenv("WINNER_STORES_RANK2_LIMIT", "0")))
-    # 2등 페이지네이션 안전 상한 (끝에 정보 없으면 자동 중단하지만, 최악 대비)
-    parser.add_argument("--rank2-max-pages", type=int, default=int(os.getenv("WINNER_STORES_RANK2_MAX_PAGES", "80")))
+    # 끝 페이지 감지로 멈추지만 최악 대비 상한
+    parser.add_argument("--rank2-max-pages", type=int, default=int(os.getenv("WINNER_STORES_RANK2_MAX_PAGES", "120")))
 
     args = parser.parse_args()
 
@@ -494,8 +560,8 @@ def main():
     print(f"[OK] wrote: {args.out}")
     print(
         f"latestRound={data['meta']['latestRound']} range={data['meta']['range']} "
-        f"parsedRounds={s['parsedRounds']} rank1Rows={s['rank1Rows']} rank2Rows={s['rank2Rows']} "
-        f"failures={len(data['meta']['failures'])}"
+        f"parsedRounds={s['parsedRounds']} rawRank1Rows={s['rawRank1Rows']} rawRank2Rows={s['rawRank2Rows']} "
+        f"aggItems={s['aggItems']} aggRank2Items={s['aggRank2Items']} failures={len(data['meta']['failures'])}"
     )
 
 
