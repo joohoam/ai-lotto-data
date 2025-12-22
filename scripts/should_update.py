@@ -146,7 +146,10 @@ def main() -> int:
         needs_update = True if latest_local is None else (latest_remote != latest_local)
 
     write_github_output(needs_update, latest_remote, latest_local)
-    print(f"[GUARD] latest_remote={latest_remote} latest_local={latest_local} needs_update={needs_update} force={is_force_update()}")
+    print(
+        f"[GUARD] latest_remote={latest_remote} latest_local={latest_local} "
+        f"needs_update={needs_update} force={is_force_update()}"
+    )
     return 0
 
 
