@@ -3,12 +3,11 @@ import os
 import re
 import time
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 import requests
 from bs4 import BeautifulSoup
 
-# urllib3 Retry (requests가 내부적으로 사용)
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
@@ -43,6 +42,10 @@ SIDO_LIST = [
     "세종", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
 ]
 SIDO_RE = re.compile(r"^(서울|경기|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주)\b")
+
+# ✅ 온라인(인터넷) 판정 키워드: "동행복권" 단어만으로는 온라인 판정 금지
+ONLINE_STORE_NAME_KEYWORDS = ["인터넷 복권판매사이트"]
+ONLINE_ADDR_KEYWORDS = ["dhlottery.co.kr", "동행복권(dhlottery.co.kr)", "동행복권 (dhlottery.co.kr)"]
 
 
 def ensure_dirs():
@@ -218,7 +221,6 @@ def extract_max_page(soup: BeautifulSoup) -> Optional[int]:
         if div:
             candidates.append(div)
     if not candidates:
-        # class가 애매한 경우: 숫자 링크가 몰려있는 div 탐색
         for div in soup.find_all("div"):
             txt = normalize_text(div.get_text(" ", strip=True))
             if txt and re.search(r"\b1\b", txt) and re.search(r"\b2\b", txt):
@@ -249,8 +251,6 @@ def fetch_rank_page(session: requests.Session, round_no: int, rank_no: int, page
     }
 
     r = session.post(POST_URL, headers=HEADERS, data=data, timeout=TIMEOUT)
-
-    # Retry 어댑터가 status code는 재시도하지만, 최종적으로 4xx/5xx가 남을 수 있음
     r.raise_for_status()
 
     if not r.encoding or r.encoding.lower() in ("iso-8859-1", "ascii"):
@@ -275,7 +275,7 @@ def fetch_rank_rows(session: requests.Session, round_no: int, rank_no: int) -> L
         tb = find_rank_table(soup, rank_no) or find_store_table_fallback(soup)
         rows = parse_rows_from_table(tb)
 
-        # ✅ “페이지가 바뀌지 않고 같은 내용만 반복되는” 케이스 빠른 종료
+        # ✅ 같은 내용 반복 종료(무한루프 방지)
         signature = "|".join(["#".join(r) for r in rows[:10]])
         if prev_page_signature is not None and signature == prev_page_signature:
             break
@@ -290,11 +290,9 @@ def fetch_rank_rows(session: requests.Session, round_no: int, rank_no: int) -> L
             all_rows.append(cells)
             new_cnt += 1
 
-        # 신규가 없으면 종료
         if new_cnt == 0:
             break
 
-        # 페이지네이션 힌트가 있으면 그 이상은 안 감
         if last_page_hint is not None and page >= last_page_hint:
             break
 
@@ -303,25 +301,54 @@ def fetch_rank_rows(session: requests.Session, round_no: int, rank_no: int) -> L
     return all_rows
 
 
+def is_online_row(cells: List[str]) -> bool:
+    """
+    ✅ '인터넷 복권판매사이트'만 온라인으로 분류한다.
+    - '동행복권OO점' 같은 오프라인 상호는 온라인으로 오인하면 안 됨.
+    """
+    # 통상: [번호, 상호명, 소재지, ...]
+    store_name = normalize_text(cells[1]) if len(cells) >= 2 else ""
+    addr = extract_address_from_row_cells(cells) or (normalize_text(cells[2]) if len(cells) >= 3 else "")
+    joined = normalize_text(" ".join(cells))
+
+    if any(k in store_name for k in ONLINE_STORE_NAME_KEYWORDS):
+        return True
+
+    # 주소/소재지에 도메인 표기가 있으면 온라인
+    if any(k in addr for k in ONLINE_ADDR_KEYWORDS):
+        return True
+    if "dhlottery.co.kr" in addr:
+        return True
+
+    # 보수적 fallback: "인터넷" + 도메인
+    if "인터넷" in joined and "dhlottery" in joined:
+        return True
+
+    return False
+
+
 def tally(rows: List[List[str]]) -> Dict[str, Any]:
     by_sido = {s: 0 for s in SIDO_LIST}
     internet = 0
     other = 0
     total = 0
+    offline_total = 0
 
     for cells in rows:
         joined = normalize_text(" ".join(cells))
         if not joined:
             continue
 
-        if "인터넷" in joined or "동행복권" in joined or "dhlottery" in joined:
+        total += 1
+
+        if is_online_row(cells):
             internet += 1
-            total += 1
             continue
 
+        # 오프라인 집계
+        offline_total += 1
         addr = extract_address_from_row_cells(cells)
         sido = detect_sido(addr or "")
-        total += 1
 
         if sido and sido in by_sido:
             by_sido[sido] += 1
@@ -329,10 +356,14 @@ def tally(rows: List[List[str]]) -> Dict[str, Any]:
             other += 1
 
     return {
+        # ✅ 기존 필드 유지(호환)
         "totalStores": total,
         "bySido": by_sido,
         "internet": internet,
         "other": other,
+        # ✅ 추가 필드(선택): 앱에서 온라인/오프라인 분리 표시용
+        "offlineTotal": offline_total,
+        "onlineTotal": internet,
     }
 
 
@@ -357,7 +388,6 @@ def main():
         try:
             rounds_obj[str(rnd)] = fetch_round_region(session, rnd)
         except Exception as e:
-            # 개별 회차 실패해도 다음 회차로 진행(전량 재수집에서 안정성 우선)
             print(f"[region] ERROR round={rnd}: {e}")
         time.sleep(0.08)
 
