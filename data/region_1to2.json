@@ -2,7 +2,7 @@
   "meta": {
     "latestRound": 1203,
     "range": 10,
-    "updatedAt": "2025-12-22T09:13:42+09:00"
+    "updatedAt": "2025-12-22T10:37:54+09:00"
   },
   "rounds": {
     "1203": {
@@ -28,13 +28,15 @@
           "제주": 0
         },
         "internet": 0,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 21,
+        "onlineTotal": 0
       },
       "rank2": {
         "totalStores": 118,
         "bySido": {
           "서울": 17,
-          "경기": 38,
+          "경기": 39,
           "인천": 5,
           "부산": 1,
           "대구": 6,
@@ -51,8 +53,10 @@
           "경남": 12,
           "제주": 1
         },
-        "internet": 5,
-        "other": 0
+        "internet": 4,
+        "other": 0,
+        "offlineTotal": 114,
+        "onlineTotal": 4
       }
     },
     "1202": {
@@ -78,12 +82,14 @@
           "제주": 0
         },
         "internet": 0,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 14,
+        "onlineTotal": 0
       },
       "rank2": {
         "totalStores": 109,
         "bySido": {
-          "서울": 12,
+          "서울": 13,
           "경기": 31,
           "인천": 4,
           "부산": 4,
@@ -96,13 +102,15 @@
           "충북": 3,
           "충남": 11,
           "전북": 3,
-          "전남": 6,
+          "전남": 7,
           "경북": 5,
           "경남": 5,
           "제주": 0
         },
-        "internet": 2,
-        "other": 0
+        "internet": 0,
+        "other": 0,
+        "offlineTotal": 109,
+        "onlineTotal": 0
       }
     },
     "1201": {
@@ -128,7 +136,9 @@
           "제주": 0
         },
         "internet": 1,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 18,
+        "onlineTotal": 1
       },
       "rank2": {
         "totalStores": 84,
@@ -152,7 +162,9 @@
           "제주": 2
         },
         "internet": 3,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 81,
+        "onlineTotal": 3
       }
     },
     "1200": {
@@ -178,7 +190,9 @@
           "제주": 0
         },
         "internet": 1,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 26,
+        "onlineTotal": 1
       },
       "rank2": {
         "totalStores": 80,
@@ -202,7 +216,9 @@
           "제주": 1
         },
         "internet": 0,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 80,
+        "onlineTotal": 0
       }
     },
     "1199": {
@@ -228,7 +244,9 @@
           "제주": 0
         },
         "internet": 1,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 16,
+        "onlineTotal": 1
       },
       "rank2": {
         "totalStores": 75,
@@ -246,13 +264,15 @@
           "충북": 3,
           "충남": 3,
           "전북": 0,
-          "전남": 2,
+          "전남": 3,
           "경북": 3,
           "경남": 5,
           "제주": 0
         },
-        "internet": 1,
-        "other": 0
+        "internet": 0,
+        "other": 0,
+        "offlineTotal": 75,
+        "onlineTotal": 0
       }
     },
     "1198": {
@@ -278,7 +298,9 @@
           "제주": 0
         },
         "internet": 0,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 10,
+        "onlineTotal": 0
       },
       "rank2": {
         "totalStores": 78,
@@ -302,7 +324,9 @@
           "제주": 0
         },
         "internet": 2,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 76,
+        "onlineTotal": 2
       }
     },
     "1197": {
@@ -328,14 +352,16 @@
           "제주": 0
         },
         "internet": 1,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 12,
+        "onlineTotal": 1
       },
       "rank2": {
         "totalStores": 74,
         "bySido": {
           "서울": 10,
           "경기": 22,
-          "인천": 4,
+          "인천": 5,
           "부산": 7,
           "대구": 4,
           "광주": 4,
@@ -351,8 +377,10 @@
           "경남": 3,
           "제주": 2
         },
-        "internet": 5,
-        "other": 0
+        "internet": 4,
+        "other": 0,
+        "offlineTotal": 70,
+        "onlineTotal": 4
       }
     },
     "1196": {
@@ -378,7 +406,9 @@
           "제주": 0
         },
         "internet": 0,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 15,
+        "onlineTotal": 0
       },
       "rank2": {
         "totalStores": 94,
@@ -402,7 +432,9 @@
           "제주": 0
         },
         "internet": 1,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 93,
+        "onlineTotal": 1
       }
     },
     "1195": {
@@ -428,7 +460,9 @@
           "제주": 0
         },
         "internet": 0,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 10,
+        "onlineTotal": 0
       },
       "rank2": {
         "totalStores": 86,
@@ -452,7 +486,9 @@
           "제주": 0
         },
         "internet": 0,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 86,
+        "onlineTotal": 0
       }
     },
     "1194": {
@@ -478,7 +514,9 @@
           "제주": 1
         },
         "internet": 0,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 28,
+        "onlineTotal": 0
       },
       "rank2": {
         "totalStores": 99,
@@ -502,7 +540,9 @@
           "제주": 9
         },
         "internet": 3,
-        "other": 0
+        "other": 0,
+        "offlineTotal": 96,
+        "onlineTotal": 3
       }
     }
   }
