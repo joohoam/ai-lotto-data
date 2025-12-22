@@ -3,7 +3,7 @@ import os
 import re
 import time
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any
 
 import requests
 from bs4 import BeautifulSoup
@@ -25,16 +25,14 @@ HEADERS = {
 
 RANGE = int(os.getenv("REGION_RANGE", "10"))
 
-# 튜닝 파라미터 (env로 조정 가능)
-MAX_PAGES = int(os.getenv("REGION_MAX_PAGES", "220"))
+# 튜닝 파라미터
+MAX_PAGES = int(os.getenv("REGION_MAX_PAGES", "220"))  # 2등 다페이지 대비
 SLEEP_PER_PAGE = float(os.getenv("REGION_SLEEP_PER_PAGE", "0.10"))
 TIMEOUT = int(os.getenv("REGION_TIMEOUT", "25"))
 
-# 네트워크 재시도(HTTP 429/5xx 등에 자동 백오프)
 HTTP_RETRY_TOTAL = int(os.getenv("REGION_HTTP_RETRY_TOTAL", "6"))
 HTTP_BACKOFF = float(os.getenv("REGION_HTTP_BACKOFF", "0.8"))
 
-# 파일 표시: 최신회차가 위로 오도록 정렬
 SORT_DESC = os.getenv("REGION_SORT_DESC", "1") == "1"
 
 SIDO_LIST = [
@@ -43,9 +41,12 @@ SIDO_LIST = [
 ]
 SIDO_RE = re.compile(r"^(서울|경기|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주)\b")
 
-# ✅ 온라인(인터넷) 판정 키워드: "동행복권" 단어만으로는 온라인 판정 금지
+# 온라인(인터넷) 판정 키워드
 ONLINE_STORE_NAME_KEYWORDS = ["인터넷 복권판매사이트"]
 ONLINE_ADDR_KEYWORDS = ["dhlottery.co.kr", "동행복권(dhlottery.co.kr)", "동행복권 (dhlottery.co.kr)"]
+
+# 섹션 라벨 감지(표 안/밖 어디서든 등장할 수 있음)
+RANK_LABEL_RE = re.compile(r"([12])\s*등\s*배출점")
 
 
 def ensure_dirs():
@@ -140,43 +141,43 @@ def extract_address_from_row_cells(cells: List[str]) -> Optional[str]:
     return None
 
 
-def parse_rows_from_table(tb) -> List[List[str]]:
-    if tb is None:
-        return []
-
-    rows: List[List[str]] = []
-    for tr in tb.find_all("tr"):
-        tds = tr.find_all(["td", "th"])
-        if not tds:
-            continue
-
-        cells = [normalize_text(td.get_text(" ", strip=True)) for td in tds]
-        headerish = " ".join(cells)
-
-        if ("상호" in headerish and ("소재지" in headerish or "주소" in headerish)):
-            continue
-        if "조회" in headerish and "없" in headerish:
-            continue
-
-        if len(cells) >= 3:
-            rows.append(cells)
-
-    return rows
+def infer_rank_for_table(tb: Tag) -> Optional[int]:
+    """
+    테이블 바로 위(가까운 라벨)에서 '1등 배출점'/'2등 배출점'을 찾아
+    이 table이 어느 등수 섹션인지 판정한다.
+    """
+    el = tb.find_previous(["h1", "h2", "h3", "h4", "h5", "strong", "p", "span", "div", "li", "a"])
+    steps = 0
+    while el is not None and steps < 250:
+        steps += 1
+        txt = normalize_text(el.get_text(" ", strip=True))
+        if txt:
+            m = RANK_LABEL_RE.search(txt)
+            if m:
+                return int(m.group(1))
+        el = el.find_previous(["h1", "h2", "h3", "h4", "h5", "strong", "p", "span", "div", "li", "a"])
+    return None
 
 
-def find_store_table_fallback(soup: BeautifulSoup):
-    tables = soup.find_all("table")
-    best = None
+def find_rank_table(soup: BeautifulSoup, rank_no: int) -> Optional[Tag]:
+    """
+    ✅ 라벨 기반으로만 테이블 선택: 2등이 1등으로 섞이는 사고 구조적으로 차단
+    """
+    best: Optional[Tag] = None
     best_score = -1.0
 
-    for tb in tables:
+    for tb in soup.find_all("table"):
+        r = infer_rank_for_table(tb)
+        if r != int(rank_no):
+            continue
+
         txt = normalize_text(tb.get_text(" ", strip=True))
         score = 0.0
         if "상호" in txt:
             score += 2.0
         if "소재지" in txt or "주소" in txt:
             score += 2.0
-        score += min(len(tb.select("tbody tr")), 120) / 100.0
+        score += min(len(tb.select("tbody tr")), 300) / 100.0
 
         if score > best_score:
             best_score = score
@@ -185,89 +186,28 @@ def find_store_table_fallback(soup: BeautifulSoup):
     return best
 
 
-def find_rank_table(soup: BeautifulSoup, rank_no: int):
+def extract_max_page_for_rank(soup: BeautifulSoup, rank_no: int, tb: Tag) -> Optional[int]:
     """
-    ✅ 등수(1/2) 라벨 섹션을 기준으로 해당 테이블을 선택
+    ✅ rank 테이블 이후 ~ 다음 등수 섹션 전 범위에서 paginate를 찾는다.
+    (2등 다페이지 대응)
     """
-    rank = str(rank_no)
-    best = None
-    best_n = -1
-
-    for tag in soup.find_all(["h2", "h3", "h4", "h5", "strong", "p", "span", "div", "li", "a"]):
-        txt = normalize_text(tag.get_text(" ", strip=True))
-        if not txt:
-            continue
-
-        if (f"{rank}등" in txt or f"{rank} 등" in txt) and ("배출" in txt or "판매점" in txt or "당첨" in txt):
-            tb = tag.find_next("table")
-            if tb is None:
-                continue
-            n = len(tb.select("tbody tr")) or len(tb.find_all("tr"))
-            if n > best_n:
-                best_n = n
-                best = tb
-
-    return best
-
-
-def extract_max_page(soup: BeautifulSoup) -> Optional[int]:
-    """
-    ✅ 페이지네이션이 있으면 마지막 페이지를 추정해서 불필요한 요청을 줄임
-    (참고용: 페이지 전체 기준이라, rank별 추정에는 extract_max_page_for_rank를 사용)
-    """
-    candidates = []
-    for sel in ["div.paginate", "div.paging", "div.pagination", "div.page", "div.paginate_common"]:
-        div = soup.select_one(sel)
-        if div:
-            candidates.append(div)
-    if not candidates:
-        for div in soup.find_all("div"):
-            txt = normalize_text(div.get_text(" ", strip=True))
-            if txt and re.search(r"\b1\b", txt) and re.search(r"\b2\b", txt):
-                candidates.append(div)
-
-    best_max = None
-    for div in candidates:
-        txt = normalize_text(div.get_text(" ", strip=True))
-        nums = [int(x) for x in re.findall(r"\b(\d{1,4})\b", txt)]
-        if nums:
-            m = max(nums)
-            if best_max is None or m > best_max:
-                best_max = m
-
-    return best_max
-
-
-def extract_max_page_for_rank(soup: BeautifulSoup, rank_no: int, tb=None) -> Optional[int]:
-    """
-    ✅ 해당 등수 섹션(1/2등) 주변의 페이지네이션만 읽어 마지막 페이지를 추정한다.
-
-    - 페이지 전체에서 paginate 숫자를 최대값으로 잡으면(특히 2등이 다페이지인 경우)
-      1등에도 큰 last_page가 적용되어 page2 요청이 발생할 수 있다.
-    - 이 함수는 "rank 테이블 이후 ~ 다음 등수 섹션 시작 전" 범위에서만 paginate를 찾는다.
-    """
-    if tb is None:
-        tb = find_rank_table(soup, rank_no)
-    if tb is None:
-        return None
-
     other_rank = 2 if int(rank_no) == 1 else 1
-    stop_re = re.compile(rf"{other_rank}\s*등.*(배출|판매점|당첨)")
+    stop_re = re.compile(rf"{other_rank}\s*등\s*배출점")
 
     checked = 0
     for el in tb.next_elements:
         checked += 1
-        if checked > 2500:
+        if checked > 3000:
             break
 
         if isinstance(el, Tag):
-            if el.name in ["h2", "h3", "h4", "h5", "strong", "p", "span", "div", "li", "a"]:
+            if el.name in ["h1", "h2", "h3", "h4", "h5", "strong", "p", "span", "div", "li", "a"]:
                 txt = normalize_text(el.get_text(" ", strip=True))
                 if txt and stop_re.search(txt):
                     break
 
             if el.name == "div":
-                cls = " ".join(el.get("class", []) or [])
+                cls = " ".join(el.get("class", []) or "")
                 if any(k in cls for k in ["paginate", "paging", "pagination", "page", "paginate_common"]):
                     txt = normalize_text(el.get_text(" ", strip=True))
                     nums = [int(x) for x in re.findall(r"\b(\d{1,4})\b", txt)]
@@ -297,15 +237,54 @@ def fetch_rank_page(session: requests.Session, round_no: int, rank_no: int, page
     return BeautifulSoup(r.text, "html.parser")
 
 
+def parse_rows_from_table_for_rank(tb: Tag, rank_no: int) -> List[List[str]]:
+    """
+    ✅ 표 내부에서 섹션이 바뀌는 신호(예: '2등 배출점')가 등장하면 즉시 중단
+    => 같은 페이지 내 아래쪽 2등 영역이 1등으로 섞이는 현상 차단
+    """
+    rows: List[List[str]] = []
+    other_rank = 2 if int(rank_no) == 1 else 1
+    stop_re = re.compile(rf"{other_rank}\s*등\s*배출점")
+
+    for tr in tb.find_all("tr"):
+        txt_tr = normalize_text(tr.get_text(" ", strip=True))
+        if txt_tr and stop_re.search(txt_tr):
+            break
+
+        tds = tr.find_all(["td", "th"])
+        if not tds:
+            continue
+
+        cells = [normalize_text(td.get_text(" ", strip=True)) for td in tds]
+        headerish = " ".join(cells)
+
+        # 헤더/빈행 제외
+        if ("상호" in headerish and ("소재지" in headerish or "주소" in headerish)):
+            continue
+        if "조회" in headerish and "없" in headerish:
+            continue
+
+        if len(cells) >= 3:
+            rows.append(cells)
+
+    return rows
+
+
 def fetch_rank_rows(session: requests.Session, round_no: int, rank_no: int) -> List[List[str]]:
     """
-    ✅ 등수별 배출점 rows를 페이지별로 수집한다.
-
-    중요:
-    - rank 테이블을 찾지 못한 페이지에서 임의 테이블(fallback)을 쓰면
-      다른 등수(예: 2등 1페이지)가 1등으로 섞이는 사고가 발생할 수 있다.
-      따라서 rank 테이블을 못 찾으면 즉시 중단한다.
+    ✅ 1등: 무조건 page=1만 요청(사이트 구조상 1등은 한 페이지에 전부)
+    ✅ 2등: paginate 기반 수집(15개/페이지)
     """
+    # 1등은 페이지네이션이 없다고 봄(구조 기반 확정)
+    if int(rank_no) == 1:
+        soup = fetch_rank_page(session, round_no, rank_no, 1)
+        tb = find_rank_table(soup, 1)
+        if tb is None:
+            print(f"[region] WARN round={round_no} rank=1: rank table not found on page1")
+            return []
+        return parse_rows_from_table_for_rank(tb, 1)
+
+    # 2등(다페이지)
     seen = set()
     all_rows: List[List[str]] = []
 
@@ -313,18 +292,18 @@ def fetch_rank_rows(session: requests.Session, round_no: int, rank_no: int) -> L
     prev_page_signature: Optional[str] = None
 
     for page in range(1, MAX_PAGES + 1):
-        soup = fetch_rank_page(session, round_no, rank_no, page)
+        soup = fetch_rank_page(session, round_no, 2, page)
 
-        tb = find_rank_table(soup, rank_no)
+        tb = find_rank_table(soup, 2)
         if tb is None:
             if page == 1:
-                print(f"[region] WARN round={round_no} rank={rank_no}: rank table not found on page1")
+                print(f"[region] WARN round={round_no} rank=2: rank table not found on page1")
             break
 
         if page == 1:
-            last_page_hint = extract_max_page_for_rank(soup, rank_no, tb)
+            last_page_hint = extract_max_page_for_rank(soup, 2, tb)
 
-        rows = parse_rows_from_table(tb)
+        rows = parse_rows_from_table_for_rank(tb, 2)
 
         signature = "|".join(["#".join(r) for r in rows[:10]])
         if prev_page_signature is not None and signature == prev_page_signature:
@@ -352,10 +331,6 @@ def fetch_rank_rows(session: requests.Session, round_no: int, rank_no: int) -> L
 
 
 def is_online_row(cells: List[str]) -> bool:
-    """
-    ✅ '인터넷 복권판매사이트'만 온라인으로 분류한다.
-    - '동행복권OO점' 같은 오프라인 상호는 온라인으로 오인하면 안 됨.
-    """
     store_name = normalize_text(cells[1]) if len(cells) >= 2 else ""
     addr = extract_address_from_row_cells(cells) or (normalize_text(cells[2]) if len(cells) >= 3 else "")
     joined = normalize_text(" ".join(cells))
