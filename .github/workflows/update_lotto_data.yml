@@ -53,7 +53,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r scripts/requirements.txt
 
-      # ✅ 신규 회차 없으면 스킵하되, 수동 실행에서 force=true면 업데이트 강제
+      # ✅ 신규 회차 없으면 스킵. 수동 실행에서 force=true면 무조건 업데이트
       - name: Guard - check if update needed
         id: guard
         shell: bash
@@ -76,9 +76,18 @@ jobs:
         shell: bash
         env:
           PYTHONUNBUFFERED: "1"
+
+          # ✅ 모든 작업은 최근 10회만
           REGION_RANGE: "10"
           WINNER_STORES_RANGE: "10"
 
+          # ✅ 2등 페이지네이션 안전 상한
+          WINNER_STORES_RANK2_MAX_PAGES: "120"
+
+          # ✅ 2등 데이터가 너무 커지면 제한(0이면 제한 없음)
+          # WINNER_STORES_RANK2_LIMIT: "0"
+
+          # region 스크립트 안정성(기존값 유지/조정 가능)
           REGION_TIMEOUT: "25"
           REGION_MAX_PAGES: "220"
           REGION_SLEEP_PER_PAGE: "0.10"
