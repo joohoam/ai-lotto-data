@@ -32,6 +32,15 @@ DEFAULT_HEADERS = {
     "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.7,en;q=0.6",
 }
 
+ONLINE_STORE_NAME_KEYWORDS = [
+    "인터넷 복권판매사이트",
+]
+ONLINE_ADDR_KEYWORDS = [
+    "dhlottery.co.kr",
+    "동행복권(dhlottery.co.kr)",
+    "동행복권 (dhlottery.co.kr)",
+]
+
 
 # -----------------------------
 # HTTP helpers
@@ -139,6 +148,7 @@ class RawRow:
     address: str
     sido: str
     sigungu: str
+    channel: str  # "online" or "offline"
 
 
 _SIDO_ALIASES = {
@@ -162,18 +172,41 @@ _SIDO_ALIASES = {
 }
 
 
-def normalize_region_from_address(address: str) -> Tuple[str, str]:
+def is_online_store(store_name: str, address: str) -> bool:
+    sn = (store_name or "").strip()
+    ad = (address or "").strip()
+
+    if any(k in sn for k in ONLINE_STORE_NAME_KEYWORDS):
+        return True
+    # 주소에 동행복권 도메인/표기가 있으면 온라인
+    if any(k in ad for k in ONLINE_ADDR_KEYWORDS):
+        return True
+    # 더 보수적으로: 주소에 도메인만 있어도 온라인
+    if "dhlottery.co.kr" in ad:
+        return True
+    return False
+
+
+def normalize_region(store_name: str, address: str) -> Tuple[str, str, str]:
+    """
+    return: (sido, sigungu, channel)
+    - 인터넷 복권판매사이트는 무조건 channel=online / sido=온라인
+    - 그 외는 주소 기반으로 sido/sigungu 파싱
+    """
+    if is_online_store(store_name, address):
+        return "온라인", "", "online"
+
     addr = (address or "").strip()
     if not addr:
-        return "", ""
-    if "dhlottery.co.kr" in addr or "인터넷" in addr:
-        return "온라인", ""
+        return "", "", "offline"
+
     parts = addr.split()
     if not parts:
-        return "", ""
+        return "", "", "offline"
+
     sido = _SIDO_ALIASES.get(parts[0], parts[0])
     sigungu = parts[1] if len(parts) >= 2 else ""
-    return sido, sigungu
+    return sido, sigungu, "offline"
 
 
 def t(el) -> str:
@@ -184,7 +217,6 @@ def t(el) -> str:
 # Table picking & parsing
 # -----------------------------
 def pick_rank1_table(soup: BeautifulSoup):
-    # 1등 테이블은 보통 "구분"이 들어있음
     best = None
     best_rows = -1
     for table in soup.find_all("table"):
@@ -198,7 +230,6 @@ def pick_rank1_table(soup: BeautifulSoup):
 
 
 def pick_rank2_table(soup: BeautifulSoup):
-    # 2등 테이블은 보통 "상호" + ("소재지" or "주소") 있고 "구분"은 없음
     best = None
     best_rows = -1
     for table in soup.find_all("table"):
@@ -208,6 +239,7 @@ def pick_rank2_table(soup: BeautifulSoup):
                 continue
             data_rows = [tr for tr in table.find_all("tr") if len(tr.find_all("td")) >= 3]
             if len(data_rows) > best_rows:
+                best_rows = len(data_rows)
                 best_rows = len(data_rows)
                 best = table
     return best
@@ -224,8 +256,9 @@ def parse_rank1_rows(table, round_no: int) -> List[RawRow]:
         address = t(tds[3])
         if not store_name or not address:
             continue
-        sido, sigungu = normalize_region_from_address(address)
-        out.append(RawRow(round_no, 1, store_name, method, address, sido, sigungu))
+
+        sido, sigungu, channel = normalize_region(store_name, address)
+        out.append(RawRow(round_no, 1, store_name, method, address, sido, sigungu, channel))
     return out
 
 
@@ -244,8 +277,9 @@ def parse_rank2_rows(table, round_no: int, limit_left: Optional[int]) -> List[Ra
 
         if not store_name or not address:
             continue
-        sido, sigungu = normalize_region_from_address(address)
-        out.append(RawRow(round_no, 2, store_name, "", address, sido, sigungu))
+
+        sido, sigungu, channel = normalize_region(store_name, address)
+        out.append(RawRow(round_no, 2, store_name, "", address, sido, sigungu, channel))
 
         if limit_left is not None and len(out) >= limit_left:
             break
@@ -260,7 +294,6 @@ def fetch_topstore_page(session: requests.Session, drw_no: int, now_page: int) -
         url = TOPSTORE_GET_URL.format(drwNo=drw_no)
         return decode_html(http_get(session, url))
 
-    # POST nowPage 방식 시도
     data = {
         "method": "topStore",
         "pageGubun": "L645",
@@ -270,16 +303,11 @@ def fetch_topstore_page(session: requests.Session, drw_no: int, now_page: int) -
     try:
         return decode_html(http_post(session, TOPSTORE_BASE_URL, data=data))
     except Exception:
-        # 일부 환경에서 GET nowPage가 먹는 경우도 있어 fallback
         url = TOPSTORE_GET_URL.format(drwNo=drw_no) + f"&nowPage={now_page}"
         return decode_html(http_get(session, url))
 
 
 def page_signature_rank2(rows: List[RawRow]) -> Tuple[Tuple[str, str], ...]:
-    """
-    페이지 반복(무한루프) 감지를 위한 시그니처.
-    - "순서 포함" 시그니처로 반복 페이지를 잡는다.
-    """
     return tuple((r.store_name, r.address) for r in rows)
 
 
@@ -290,21 +318,10 @@ def crawl_one_round(
     rank2_limit: Optional[int],
     rank2_max_pages: int,
 ) -> Tuple[List[RawRow], List[dict], dict]:
-    """
-    - 1등: page=1에서 1회 파싱
-    - 2등: page=1..N 반복
-      * 페이지에 데이터가 없으면 중단
-      * 페이지 내용이 이전 페이지와 동일(반복)이면 중단
-      * rank2_limit 도달하면 중단
-    """
     failures: List[dict] = []
     raw_rows: List[RawRow] = []
 
-    meta_debug = {
-        "rank2PagesFetched": 0,
-        "rank2RowsFetched": 0,
-        "rank2StoppedBy": "",
-    }
+    dbg = {"rank2PagesFetched": 0, "rank2RowsFetched": 0, "rank2StoppedBy": ""}
 
     # page 1
     html1 = fetch_topstore_page(session, drw_no, 1)
@@ -322,32 +339,30 @@ def crawl_one_round(
         t2 = pick_rank2_table(soup1)
         if t2 is None:
             failures.append({"round": drw_no, "rank": 2, "page": 1, "reason": "Rank2 table not found"})
-            return raw_rows, failures, meta_debug
+            return raw_rows, failures, dbg
 
         limit_left = None if rank2_limit is None else max(0, rank2_limit)
         r2_page1 = parse_rank2_rows(t2, drw_no, limit_left)
-        meta_debug["rank2PagesFetched"] += 1
-        meta_debug["rank2RowsFetched"] += len(r2_page1)
+
+        dbg["rank2PagesFetched"] += 1
+        dbg["rank2RowsFetched"] += len(r2_page1)
 
         if not r2_page1:
-            meta_debug["rank2StoppedBy"] = "empty_page_1"
-            return raw_rows, failures, meta_debug
+            dbg["rank2StoppedBy"] = "empty_page_1"
+            return raw_rows, failures, dbg
 
         raw_rows.extend(r2_page1)
 
-        if rank2_limit is not None:
-            got = sum(1 for r in raw_rows if r.rank == 2)
-            if got >= rank2_limit:
-                meta_debug["rank2StoppedBy"] = "limit_reached_on_page_1"
-                return raw_rows, failures, meta_debug
+        if rank2_limit is not None and sum(1 for r in raw_rows if r.rank == 2) >= rank2_limit:
+            dbg["rank2StoppedBy"] = "limit_reached_on_page_1"
+            return raw_rows, failures, dbg
 
         prev_sig = page_signature_rank2(r2_page1)
 
-        # page 2..N
         page = 2
         while page <= rank2_max_pages:
             if rank2_limit is not None and sum(1 for r in raw_rows if r.rank == 2) >= rank2_limit:
-                meta_debug["rank2StoppedBy"] = "limit_reached"
+                dbg["rank2StoppedBy"] = "limit_reached"
                 break
 
             htmlp = fetch_topstore_page(session, drw_no, page)
@@ -355,24 +370,25 @@ def crawl_one_round(
 
             t2p = pick_rank2_table(soup)
             if t2p is None:
-                meta_debug["rank2StoppedBy"] = "no_rank2_table"
+                dbg["rank2StoppedBy"] = "no_rank2_table"
                 break
 
-            limit_left = None
             if rank2_limit is not None:
                 limit_left = max(0, rank2_limit - sum(1 for r in raw_rows if r.rank == 2))
+            else:
+                limit_left = None
 
             r2 = parse_rank2_rows(t2p, drw_no, limit_left)
-            meta_debug["rank2PagesFetched"] += 1
-            meta_debug["rank2RowsFetched"] += len(r2)
+            dbg["rank2PagesFetched"] += 1
+            dbg["rank2RowsFetched"] += len(r2)
 
             if not r2:
-                meta_debug["rank2StoppedBy"] = "empty_page"
+                dbg["rank2StoppedBy"] = "empty_page"
                 break
 
             sig = page_signature_rank2(r2)
             if sig == prev_sig:
-                meta_debug["rank2StoppedBy"] = "repeated_page_signature"
+                dbg["rank2StoppedBy"] = "repeated_page_signature"
                 break
 
             raw_rows.extend(r2)
@@ -381,10 +397,10 @@ def crawl_one_round(
             page += 1
             time.sleep(0.15)
 
-        if page > rank2_max_pages and not meta_debug["rank2StoppedBy"]:
-            meta_debug["rank2StoppedBy"] = "max_pages_guard"
+        if page > rank2_max_pages and not dbg["rank2StoppedBy"]:
+            dbg["rank2StoppedBy"] = "max_pages_guard"
 
-    return raw_rows, failures, meta_debug
+    return raw_rows, failures, dbg
 
 
 # -----------------------------
@@ -393,7 +409,7 @@ def crawl_one_round(
 def aggregate_rows(rows: List[RawRow]) -> List[dict]:
     """
     (round, rank, storeName, address)로 묶고 count 집계.
-    method는 1등 기준으로 유지(같으면 동일, 다르면 첫 값 유지).
+    - 온라인(인터넷 복권판매사이트)은 channel=online, sido=온라인 유지
     """
     m: Dict[Tuple[int, int, str, str], dict] = {}
 
@@ -408,12 +424,12 @@ def aggregate_rows(rows: List[RawRow]) -> List[dict]:
                 "address": r.address,
                 "sido": r.sido,
                 "sigungu": r.sigungu,
-                "count": 1,
+                "channel": r.channel,   # ✅ online/offline
+                "count": 1,             # ✅ 묶인 건수
             }
         else:
             m[key]["count"] += 1
 
-    # 정렬: rank asc(1 먼저) + count desc + storeName
     out = list(m.values())
     out.sort(key=lambda x: (x["rank"], -x["count"], x["storeName"]))
     return out
@@ -426,7 +442,6 @@ def build_json(range_n: int, include_rank2: bool, rank2_limit: Optional[int], ra
 
         failures: List[dict] = []
         all_raw_rows: List[RawRow] = []
-
         per_round_debug: Dict[str, dict] = {}
 
         stats = {
@@ -439,6 +454,8 @@ def build_json(range_n: int, include_rank2: bool, rank2_limit: Optional[int], ra
             "aggItems": 0,
             "aggRank1Items": 0,
             "aggRank2Items": 0,
+            "onlineAggRank1Items": 0,
+            "onlineAggRank2Items": 0,
         }
 
         for drw_no in range(start, latest + 1):
@@ -452,11 +469,11 @@ def build_json(range_n: int, include_rank2: bool, rank2_limit: Optional[int], ra
                 )
                 failures.extend(fail)
                 all_raw_rows.extend(rows)
-
                 per_round_debug[str(drw_no)] = dbg
 
                 if rows:
                     stats["parsedRounds"] += 1
+
                 stats["rawRank1Rows"] += sum(1 for r in rows if r.rank == 1)
                 stats["rawRank2Rows"] += sum(1 for r in rows if r.rank == 2)
 
@@ -464,24 +481,23 @@ def build_json(range_n: int, include_rank2: bool, rank2_limit: Optional[int], ra
             except Exception as e:
                 failures.append({"round": drw_no, "reason": str(e)})
 
-        # 회차별 집계(byRound)
-        by_round: Dict[str, List[dict]] = {}
-        # 지역별 집계(byRegion)
-        by_region: Dict[str, List[dict]] = {}
-
         # round별 raw rows를 모아서 aggregate
         tmp_round: Dict[int, List[RawRow]] = {}
         for r in all_raw_rows:
             tmp_round.setdefault(r.round, []).append(r)
 
+        by_round: Dict[str, List[dict]] = {}
         for rno, rrows in tmp_round.items():
-            agg = aggregate_rows(rrows)
-            by_round[str(rno)] = agg
+            by_round[str(rno)] = aggregate_rows(rrows)
 
-        # region별로는 "집계된 항목" 기준으로 다시 모으는 게 UX에 맞음
+        # region별: 집계된 항목 기준
+        by_region: Dict[str, List[dict]] = {}
+        online_by_rank: Dict[str, List[dict]] = {"1": [], "2": []}  # ✅ 요청하신 "1등/2등 온라인 카테고리"
+
         for rno_str, items in by_round.items():
             for it in items:
                 region_key = it.get("sido") or "기타"
+                # 온라인은 region_key가 "온라인"으로 들어옴
                 by_region.setdefault(region_key, []).append(
                     {
                         "round": it["round"],
@@ -490,19 +506,39 @@ def build_json(range_n: int, include_rank2: bool, rank2_limit: Optional[int], ra
                         "method": it.get("method", ""),
                         "address": it["address"],
                         "sigungu": it.get("sigungu", ""),
+                        "channel": it.get("channel", "offline"),
                         "count": it.get("count", 1),
                     }
                 )
 
-        # region 정렬: 최신 회차 우선
+                # ✅ 온라인은 별도 섹션으로도 제공 (안티그래비티에서 쉽게 쓰게)
+                if it.get("channel") == "online":
+                    rk = str(it.get("rank"))
+                    if rk in online_by_rank:
+                        online_by_rank[rk].append(
+                            {
+                                "round": it["round"],
+                                "rank": it["rank"],
+                                "storeName": it["storeName"],
+                                "address": it["address"],
+                                "count": it.get("count", 1),
+                            }
+                        )
+
+        # 정렬: 최신 회차 우선
         for k in by_region:
             by_region[k].sort(key=lambda x: (x["round"], x["rank"], -x["count"]), reverse=True)
+        for rk in online_by_rank:
+            online_by_rank[rk].sort(key=lambda x: (x["round"], -x["count"]), reverse=True)
 
         # stats(집계 기반)
         all_items = [it for arr in by_round.values() for it in arr]
         stats["aggItems"] = len(all_items)
         stats["aggRank1Items"] = sum(1 for it in all_items if it["rank"] == 1)
         stats["aggRank2Items"] = sum(1 for it in all_items if it["rank"] == 2)
+
+        stats["onlineAggRank1Items"] = sum(1 for it in all_items if it["rank"] == 1 and it.get("channel") == "online")
+        stats["onlineAggRank2Items"] = sum(1 for it in all_items if it["rank"] == 2 and it.get("channel") == "online")
 
         now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -525,7 +561,8 @@ def build_json(range_n: int, include_rank2: bool, rank2_limit: Optional[int], ra
                 "failures": failures,
             },
             "byRound": by_round,
-            "byRegion": by_region,
+            "byRegion": by_region,           # ✅ "온라인" 키로 따로 들어감
+            "onlineByRank": online_by_rank,  # ✅ 요청사항: 인터넷 카테고리에서 1등/2등 분리 제공
         }
 
 
@@ -560,8 +597,8 @@ def main():
     print(f"[OK] wrote: {args.out}")
     print(
         f"latestRound={data['meta']['latestRound']} range={data['meta']['range']} "
-        f"parsedRounds={s['parsedRounds']} rawRank1Rows={s['rawRank1Rows']} rawRank2Rows={s['rawRank2Rows']} "
-        f"aggItems={s['aggItems']} aggRank2Items={s['aggRank2Items']} failures={len(data['meta']['failures'])}"
+        f"parsedRounds={s['parsedRounds']} rawRank2Rows={s['rawRank2Rows']} "
+        f"aggItems={s['aggItems']} onlineRank2Items={s['onlineAggRank2Items']} failures={len(data['meta']['failures'])}"
     )
 
 
