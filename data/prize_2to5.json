@@ -1,8 +1,8 @@
 {
   "meta": {
-    "latestRound": 1203,
+    "latestRound": 1204,
     "range": 200,
-    "updatedAt": "2025-12-22T16:33:06.880669+09:00"
+    "updatedAt": "2025-12-27T20:51:44.065504+09:00"
   },
   "rounds": {
     "1163": {
@@ -1067,6 +1067,32 @@
       "5": {
         "totalPrize": 13924115000,
         "winners": 2784823,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1204": {
+      "2": {
+        "totalPrize": 4983023125,
+        "winners": 95,
+        "perGamePrize": 52452875,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4983025322,
+        "winners": 3361,
+        "perGamePrize": 1482602,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8245950000,
+        "winners": 164919,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13769175000,
+        "winners": 2753835,
         "perGamePrize": 5000,
         "criteria": "당첨번호 3개 숫자일치"
       }
