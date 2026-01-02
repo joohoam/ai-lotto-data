@@ -1,1046 +1,32 @@
 {
   "meta": {
-    "latestRound": 1204,
+    "latestRound": 1203,
     "range": 200,
-    "updatedAt": "2025-12-28T07:46:42.696493+09:00"
+    "updatedAt": "2026-01-03T00:15:21.527963+09:00"
   },
   "rounds": {
-    "1163": {
+    "1204": {
       "2": {
-        "totalPrize": 4842227925,
-        "winners": 75,
-        "perGamePrize": 64563039,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4842230564,
-        "winners": 3386,
-        "perGamePrize": 1430074,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8410200000,
-        "winners": 168204,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13975135000,
-        "winners": 2795027,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1164": {
-      "2": {
-        "totalPrize": 4751699740,
-        "winners": 76,
-        "perGamePrize": 62522365,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4751700020,
-        "winners": 3470,
-        "perGamePrize": 1369366,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8502250000,
-        "winners": 170045,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 14035475000,
-        "winners": 2807095,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1165": {
-      "2": {
-        "totalPrize": 4750384821,
-        "winners": 91,
-        "perGamePrize": 52202031,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4750387144,
-        "winners": 3173,
-        "perGamePrize": 1497128,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7900700000,
-        "winners": 158014,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13152275000,
-        "winners": 2630455,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1166": {
-      "2": {
-        "totalPrize": 4835413200,
-        "winners": 80,
-        "perGamePrize": 60442665,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4835413255,
-        "winners": 2803,
-        "perGamePrize": 1725085,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7391850000,
-        "winners": 147837,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 12283675000,
-        "winners": 2456735,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1167": {
-      "2": {
-        "totalPrize": 4806813240,
-        "winners": 69,
-        "perGamePrize": 69663960,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4806813178,
-        "winners": 2942,
-        "perGamePrize": 1633859,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7854700000,
-        "winners": 157094,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13071860000,
-        "winners": 2614372,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1168": {
-      "2": {
-        "totalPrize": 4629377840,
-        "winners": 74,
-        "perGamePrize": 62559160,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4629378740,
-        "winners": 3514,
-        "perGamePrize": 1317410,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8308150000,
-        "winners": 166163,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13562725000,
-        "winners": 2712545,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1169": {
-      "2": {
-        "totalPrize": 4754559712,
-        "winners": 112,
-        "perGamePrize": 42451426,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4754562112,
-        "winners": 3244,
-        "perGamePrize": 1465648,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8024150000,
-        "winners": 160483,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13340970000,
-        "winners": 2668194,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1170": {
-      "2": {
-        "totalPrize": 4621836600,
-        "winners": 103,
-        "perGamePrize": 44872200,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4621840236,
-        "winners": 5668,
-        "perGamePrize": 815427,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8193300000,
-        "winners": 163866,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13187005000,
-        "winners": 2637401,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1171": {
-      "2": {
-        "totalPrize": 3949208616,
-        "winners": 148,
-        "perGamePrize": 26683842,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 3949212384,
-        "winners": 5317,
-        "perGamePrize": 742752,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 10575150000,
-        "winners": 211503,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 15474030000,
-        "winners": 3094806,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1172": {
-      "2": {
-        "totalPrize": 4773176338,
-        "winners": 98,
-        "perGamePrize": 48705881,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4773177948,
-        "winners": 3059,
-        "perGamePrize": 1560372,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7644850000,
-        "winners": 152897,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 12952360000,
-        "winners": 2590472,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1173": {
-      "2": {
-        "totalPrize": 4719784274,
-        "winners": 94,
-        "perGamePrize": 50210471,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4719784705,
-        "winners": 3139,
-        "perGamePrize": 1503595,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8183900000,
-        "winners": 163678,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13449160000,
-        "winners": 2689832,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1174": {
-      "2": {
-        "totalPrize": 4776548565,
-        "winners": 85,
-        "perGamePrize": 56194689,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4776549840,
-        "winners": 3196,
-        "perGamePrize": 1494540,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7947200000,
-        "winners": 158944,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13350645000,
-        "winners": 2670129,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1175": {
-      "2": {
-        "totalPrize": 4613420316,
-        "winners": 92,
-        "perGamePrize": 50145873,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4613423150,
-        "winners": 3178,
-        "perGamePrize": 1451675,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8218200000,
-        "winners": 164364,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13618590000,
-        "winners": 2723718,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1176": {
-      "2": {
-        "totalPrize": 4446360078,
-        "winners": 89,
-        "perGamePrize": 49959102,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4446361759,
-        "winners": 3533,
-        "perGamePrize": 1258523,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8577250000,
-        "winners": 171545,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13734595000,
-        "winners": 2746919,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1177": {
-      "2": {
-        "totalPrize": 4576672050,
-        "winners": 75,
-        "perGamePrize": 61022294,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4576672986,
-        "winners": 3111,
-        "perGamePrize": 1471126,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7871900000,
-        "winners": 157438,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13220640000,
-        "winners": 2644128,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1178": {
-      "2": {
-        "totalPrize": 4783216890,
-        "winners": 89,
-        "perGamePrize": 53744010,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4783219613,
-        "winners": 3061,
-        "perGamePrize": 1562633,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7852200000,
-        "winners": 157044,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13269205000,
-        "winners": 2653841,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1179": {
-      "2": {
-        "totalPrize": 4686112431,
-        "winners": 63,
-        "perGamePrize": 74382737,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4686115343,
-        "winners": 2989,
-        "perGamePrize": 1567787,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7441600000,
-        "winners": 148832,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 12581840000,
-        "winners": 2516368,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1180": {
-      "2": {
-        "totalPrize": 4648538448,
-        "winners": 72,
-        "perGamePrize": 64563034,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4648538650,
-        "winners": 3010,
-        "perGamePrize": 1544365,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7663700000,
-        "winners": 153274,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 12836975000,
-        "winners": 2567395,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1181": {
-      "2": {
-        "totalPrize": 4515323274,
-        "winners": 86,
-        "perGamePrize": 52503759,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4515325060,
-        "winners": 3109,
-        "perGamePrize": 1452340,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7796900000,
-        "winners": 155938,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 12981855000,
-        "winners": 2596371,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1182": {
-      "2": {
-        "totalPrize": 4603701774,
-        "winners": 79,
-        "perGamePrize": 58274706,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4603702995,
-        "winners": 3015,
-        "perGamePrize": 1526933,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7801250000,
-        "winners": 156025,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13084790000,
-        "winners": 2616958,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1183": {
-      "2": {
-        "totalPrize": 4493593076,
-        "winners": 92,
-        "perGamePrize": 48843403,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4493596031,
-        "winners": 3623,
-        "perGamePrize": 1240297,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8451500000,
-        "winners": 169030,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13402740000,
-        "winners": 2680548,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1184": {
-      "2": {
-        "totalPrize": 4776639045,
+        "totalPrize": 4983023125,
         "winners": 95,
-        "perGamePrize": 50280411,
+        "perGamePrize": 52452875,
         "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
       },
       "3": {
-        "totalPrize": 4776640680,
-        "winners": 3115,
-        "perGamePrize": 1533432,
+        "totalPrize": 4983025322,
+        "winners": 3361,
+        "perGamePrize": 1482602,
         "criteria": "당첨번호 5개 숫자일치"
       },
       "4": {
-        "totalPrize": 7777800000,
-        "winners": 155556,
+        "totalPrize": 8245950000,
+        "winners": 164919,
         "perGamePrize": 50000,
         "criteria": "당첨번호 4개 숫자일치"
       },
       "5": {
-        "totalPrize": 12883550000,
-        "winners": 2576710,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1185": {
-      "2": {
-        "totalPrize": 4777390305,
-        "winners": 79,
-        "perGamePrize": 60473295,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4777391622,
-        "winners": 2903,
-        "perGamePrize": 1645674,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7689900000,
-        "winners": 153798,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 12831380000,
-        "winners": 2566276,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1186": {
-      "2": {
-        "totalPrize": 4633246194,
-        "winners": 89,
-        "perGamePrize": 52058946,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4633248946,
-        "winners": 3226,
-        "perGamePrize": 1436221,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8135350000,
-        "winners": 162707,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13144050000,
-        "winners": 2628810,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1187": {
-      "2": {
-        "totalPrize": 4802196700,
-        "winners": 79,
-        "perGamePrize": 60787300,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4802199267,
-        "winners": 3147,
-        "perGamePrize": 1525961,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7622400000,
-        "winners": 152448,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 12785450000,
-        "winners": 2557090,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1188": {
-      "2": {
-        "totalPrize": 4298500752,
-        "winners": 111,
-        "perGamePrize": 38725232,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4298502970,
-        "winners": 3713,
-        "perGamePrize": 1157690,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 9415700000,
-        "winners": 188314,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 14505280000,
-        "winners": 2901056,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1189": {
-      "2": {
-        "totalPrize": 4904577910,
-        "winners": 167,
-        "perGamePrize": 29368730,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4904579717,
-        "winners": 3121,
-        "perGamePrize": 1571477,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7617250000,
-        "winners": 152345,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 12888470000,
-        "winners": 2577694,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1190": {
-      "2": {
-        "totalPrize": 4622793840,
-        "winners": 113,
-        "perGamePrize": 40909680,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4622795725,
-        "winners": 3293,
-        "perGamePrize": 1403825,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8438200000,
-        "winners": 168764,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13763880000,
-        "winners": 2752776,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1191": {
-      "2": {
-        "totalPrize": 4609003080,
-        "winners": 132,
-        "perGamePrize": 34916690,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4609004463,
-        "winners": 3649,
-        "perGamePrize": 1263087,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 9237900000,
-        "winners": 184758,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 14526480000,
-        "winners": 2905296,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1192": {
-      "2": {
-        "totalPrize": 5217808500,
-        "winners": 95,
-        "perGamePrize": 54924300,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 5217809696,
-        "winners": 3476,
-        "perGamePrize": 1501096,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8577550000,
-        "winners": 171551,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 14205080000,
-        "winners": 2841016,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1193": {
-      "2": {
-        "totalPrize": 4578702744,
-        "winners": 84,
-        "perGamePrize": 54508366,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4578704160,
-        "winners": 3635,
-        "perGamePrize": 1259616,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8796800000,
-        "winners": 175936,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13911880000,
-        "winners": 2782376,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1194": {
-      "2": {
-        "totalPrize": 4597391700,
-        "winners": 99,
-        "perGamePrize": 46438300,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4597396158,
-        "winners": 5442,
-        "perGamePrize": 844799,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 9341000000,
-        "winners": 186820,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 14422720000,
-        "winners": 2884544,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1195": {
-      "2": {
-        "totalPrize": 4898644624,
-        "winners": 86,
-        "perGamePrize": 56960984,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4898645923,
-        "winners": 3337,
-        "perGamePrize": 1467979,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8281050000,
-        "winners": 165621,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13988800000,
-        "winners": 2797760,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1196": {
-      "2": {
-        "totalPrize": 5004068944,
-        "winners": 94,
-        "perGamePrize": 53234776,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 5004070820,
-        "winners": 2837,
-        "perGamePrize": 1763860,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7694700000,
-        "winners": 153894,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13095465000,
-        "winners": 2619093,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1197": {
-      "2": {
-        "totalPrize": 4777694634,
-        "winners": 74,
-        "perGamePrize": 64563441,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4777697421,
-        "winners": 3087,
-        "perGamePrize": 1547683,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8143550000,
-        "winners": 162871,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13757110000,
-        "winners": 2751422,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1198": {
-      "2": {
-        "totalPrize": 4922811114,
-        "winners": 78,
-        "perGamePrize": 63112963,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4922812780,
-        "winners": 3110,
-        "perGamePrize": 1582898,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7761400000,
-        "winners": 155228,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 12959870000,
-        "winners": 2591974,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1199": {
-      "2": {
-        "totalPrize": 4804227900,
-        "winners": 75,
-        "perGamePrize": 64056372,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4804229280,
-        "winners": 3504,
-        "perGamePrize": 1371070,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 7853650000,
-        "winners": 157073,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13024925000,
-        "winners": 2604985,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1200": {
-      "2": {
-        "totalPrize": 4714599760,
-        "winners": 80,
-        "perGamePrize": 58932497,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4714601472,
-        "winners": 3584,
-        "perGamePrize": 1315458,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8087700000,
-        "winners": 161754,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13365300000,
-        "winners": 2673060,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1201": {
-      "2": {
-        "totalPrize": 4479426504,
-        "winners": 84,
-        "perGamePrize": 53326506,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4479427899,
-        "winners": 3321,
-        "perGamePrize": 1348819,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 8302500000,
-        "winners": 166050,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13556885000,
-        "winners": 2711377,
-        "perGamePrize": 5000,
-        "criteria": "당첨번호 3개 숫자일치"
-      }
-    },
-    "1202": {
-      "2": {
-        "totalPrize": 4480958608,
-        "winners": 109,
-        "perGamePrize": 41109712,
-        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
-      },
-      "3": {
-        "totalPrize": 4480959192,
-        "winners": 3764,
-        "perGamePrize": 1190478,
-        "criteria": "당첨번호 5개 숫자일치"
-      },
-      "4": {
-        "totalPrize": 9010600000,
-        "winners": 180212,
-        "perGamePrize": 50000,
-        "criteria": "당첨번호 4개 숫자일치"
-      },
-      "5": {
-        "totalPrize": 13618850000,
-        "winners": 2723770,
+        "totalPrize": 13769175000,
+        "winners": 2753835,
         "perGamePrize": 5000,
         "criteria": "당첨번호 3개 숫자일치"
       }
@@ -1071,28 +57,1042 @@
         "criteria": "당첨번호 3개 숫자일치"
       }
     },
-    "1204": {
+    "1202": {
       "2": {
-        "totalPrize": 4983023125,
-        "winners": 95,
-        "perGamePrize": 52452875,
+        "totalPrize": 4480958608,
+        "winners": 109,
+        "perGamePrize": 41109712,
         "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
       },
       "3": {
-        "totalPrize": 4983025322,
-        "winners": 3361,
-        "perGamePrize": 1482602,
+        "totalPrize": 4480959192,
+        "winners": 3764,
+        "perGamePrize": 1190478,
         "criteria": "당첨번호 5개 숫자일치"
       },
       "4": {
-        "totalPrize": 8245950000,
-        "winners": 164919,
+        "totalPrize": 9010600000,
+        "winners": 180212,
         "perGamePrize": 50000,
         "criteria": "당첨번호 4개 숫자일치"
       },
       "5": {
-        "totalPrize": 13769175000,
-        "winners": 2753835,
+        "totalPrize": 13618850000,
+        "winners": 2723770,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1201": {
+      "2": {
+        "totalPrize": 4479426504,
+        "winners": 84,
+        "perGamePrize": 53326506,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4479427899,
+        "winners": 3321,
+        "perGamePrize": 1348819,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8302500000,
+        "winners": 166050,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13556885000,
+        "winners": 2711377,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1200": {
+      "2": {
+        "totalPrize": 4714599760,
+        "winners": 80,
+        "perGamePrize": 58932497,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4714601472,
+        "winners": 3584,
+        "perGamePrize": 1315458,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8087700000,
+        "winners": 161754,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13365300000,
+        "winners": 2673060,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1199": {
+      "2": {
+        "totalPrize": 4804227900,
+        "winners": 75,
+        "perGamePrize": 64056372,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4804229280,
+        "winners": 3504,
+        "perGamePrize": 1371070,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7853650000,
+        "winners": 157073,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13024925000,
+        "winners": 2604985,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1198": {
+      "2": {
+        "totalPrize": 4922811114,
+        "winners": 78,
+        "perGamePrize": 63112963,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4922812780,
+        "winners": 3110,
+        "perGamePrize": 1582898,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7761400000,
+        "winners": 155228,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 12959870000,
+        "winners": 2591974,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1197": {
+      "2": {
+        "totalPrize": 4777694634,
+        "winners": 74,
+        "perGamePrize": 64563441,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4777697421,
+        "winners": 3087,
+        "perGamePrize": 1547683,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8143550000,
+        "winners": 162871,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13757110000,
+        "winners": 2751422,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1196": {
+      "2": {
+        "totalPrize": 5004068944,
+        "winners": 94,
+        "perGamePrize": 53234776,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 5004070820,
+        "winners": 2837,
+        "perGamePrize": 1763860,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7694700000,
+        "winners": 153894,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13095465000,
+        "winners": 2619093,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1195": {
+      "2": {
+        "totalPrize": 4898644624,
+        "winners": 86,
+        "perGamePrize": 56960984,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4898645923,
+        "winners": 3337,
+        "perGamePrize": 1467979,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8281050000,
+        "winners": 165621,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13988800000,
+        "winners": 2797760,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1194": {
+      "2": {
+        "totalPrize": 4597391700,
+        "winners": 99,
+        "perGamePrize": 46438300,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4597396158,
+        "winners": 5442,
+        "perGamePrize": 844799,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 9341000000,
+        "winners": 186820,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 14422720000,
+        "winners": 2884544,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1193": {
+      "2": {
+        "totalPrize": 4578702744,
+        "winners": 84,
+        "perGamePrize": 54508366,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4578704160,
+        "winners": 3635,
+        "perGamePrize": 1259616,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8796800000,
+        "winners": 175936,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13911880000,
+        "winners": 2782376,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1192": {
+      "2": {
+        "totalPrize": 5217808500,
+        "winners": 95,
+        "perGamePrize": 54924300,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 5217809696,
+        "winners": 3476,
+        "perGamePrize": 1501096,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8577550000,
+        "winners": 171551,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 14205080000,
+        "winners": 2841016,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1191": {
+      "2": {
+        "totalPrize": 4609003080,
+        "winners": 132,
+        "perGamePrize": 34916690,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4609004463,
+        "winners": 3649,
+        "perGamePrize": 1263087,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 9237900000,
+        "winners": 184758,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 14526480000,
+        "winners": 2905296,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1190": {
+      "2": {
+        "totalPrize": 4622793840,
+        "winners": 113,
+        "perGamePrize": 40909680,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4622795725,
+        "winners": 3293,
+        "perGamePrize": 1403825,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8438200000,
+        "winners": 168764,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13763880000,
+        "winners": 2752776,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1189": {
+      "2": {
+        "totalPrize": 4904577910,
+        "winners": 167,
+        "perGamePrize": 29368730,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4904579717,
+        "winners": 3121,
+        "perGamePrize": 1571477,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7617250000,
+        "winners": 152345,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 12888470000,
+        "winners": 2577694,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1188": {
+      "2": {
+        "totalPrize": 4298500752,
+        "winners": 111,
+        "perGamePrize": 38725232,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4298502970,
+        "winners": 3713,
+        "perGamePrize": 1157690,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 9415700000,
+        "winners": 188314,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 14505280000,
+        "winners": 2901056,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1187": {
+      "2": {
+        "totalPrize": 4802196700,
+        "winners": 79,
+        "perGamePrize": 60787300,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4802199267,
+        "winners": 3147,
+        "perGamePrize": 1525961,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7622400000,
+        "winners": 152448,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 12785450000,
+        "winners": 2557090,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1186": {
+      "2": {
+        "totalPrize": 4633246194,
+        "winners": 89,
+        "perGamePrize": 52058946,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4633248946,
+        "winners": 3226,
+        "perGamePrize": 1436221,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8135350000,
+        "winners": 162707,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13144050000,
+        "winners": 2628810,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1185": {
+      "2": {
+        "totalPrize": 4777390305,
+        "winners": 79,
+        "perGamePrize": 60473295,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4777391622,
+        "winners": 2903,
+        "perGamePrize": 1645674,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7689900000,
+        "winners": 153798,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 12831380000,
+        "winners": 2566276,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1184": {
+      "2": {
+        "totalPrize": 4776639045,
+        "winners": 95,
+        "perGamePrize": 50280411,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4776640680,
+        "winners": 3115,
+        "perGamePrize": 1533432,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7777800000,
+        "winners": 155556,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 12883550000,
+        "winners": 2576710,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1183": {
+      "2": {
+        "totalPrize": 4493593076,
+        "winners": 92,
+        "perGamePrize": 48843403,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4493596031,
+        "winners": 3623,
+        "perGamePrize": 1240297,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8451500000,
+        "winners": 169030,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13402740000,
+        "winners": 2680548,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1182": {
+      "2": {
+        "totalPrize": 4603701774,
+        "winners": 79,
+        "perGamePrize": 58274706,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4603702995,
+        "winners": 3015,
+        "perGamePrize": 1526933,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7801250000,
+        "winners": 156025,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13084790000,
+        "winners": 2616958,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1181": {
+      "2": {
+        "totalPrize": 4515323274,
+        "winners": 86,
+        "perGamePrize": 52503759,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4515325060,
+        "winners": 3109,
+        "perGamePrize": 1452340,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7796900000,
+        "winners": 155938,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 12981855000,
+        "winners": 2596371,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1180": {
+      "2": {
+        "totalPrize": 4648538448,
+        "winners": 72,
+        "perGamePrize": 64563034,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4648538650,
+        "winners": 3010,
+        "perGamePrize": 1544365,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7663700000,
+        "winners": 153274,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 12836975000,
+        "winners": 2567395,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1179": {
+      "2": {
+        "totalPrize": 4686112431,
+        "winners": 63,
+        "perGamePrize": 74382737,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4686115343,
+        "winners": 2989,
+        "perGamePrize": 1567787,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7441600000,
+        "winners": 148832,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 12581840000,
+        "winners": 2516368,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1178": {
+      "2": {
+        "totalPrize": 4783216890,
+        "winners": 89,
+        "perGamePrize": 53744010,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4783219613,
+        "winners": 3061,
+        "perGamePrize": 1562633,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7852200000,
+        "winners": 157044,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13269205000,
+        "winners": 2653841,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1177": {
+      "2": {
+        "totalPrize": 4576672050,
+        "winners": 75,
+        "perGamePrize": 61022294,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4576672986,
+        "winners": 3111,
+        "perGamePrize": 1471126,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7871900000,
+        "winners": 157438,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13220640000,
+        "winners": 2644128,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1176": {
+      "2": {
+        "totalPrize": 4446360078,
+        "winners": 89,
+        "perGamePrize": 49959102,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4446361759,
+        "winners": 3533,
+        "perGamePrize": 1258523,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8577250000,
+        "winners": 171545,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13734595000,
+        "winners": 2746919,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1175": {
+      "2": {
+        "totalPrize": 4613420316,
+        "winners": 92,
+        "perGamePrize": 50145873,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4613423150,
+        "winners": 3178,
+        "perGamePrize": 1451675,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8218200000,
+        "winners": 164364,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13618590000,
+        "winners": 2723718,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1174": {
+      "2": {
+        "totalPrize": 4776548565,
+        "winners": 85,
+        "perGamePrize": 56194689,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4776549840,
+        "winners": 3196,
+        "perGamePrize": 1494540,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7947200000,
+        "winners": 158944,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13350645000,
+        "winners": 2670129,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1173": {
+      "2": {
+        "totalPrize": 4719784274,
+        "winners": 94,
+        "perGamePrize": 50210471,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4719784705,
+        "winners": 3139,
+        "perGamePrize": 1503595,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8183900000,
+        "winners": 163678,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13449160000,
+        "winners": 2689832,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1172": {
+      "2": {
+        "totalPrize": 4773176338,
+        "winners": 98,
+        "perGamePrize": 48705881,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4773177948,
+        "winners": 3059,
+        "perGamePrize": 1560372,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7644850000,
+        "winners": 152897,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 12952360000,
+        "winners": 2590472,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1171": {
+      "2": {
+        "totalPrize": 3949208616,
+        "winners": 148,
+        "perGamePrize": 26683842,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 3949212384,
+        "winners": 5317,
+        "perGamePrize": 742752,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 10575150000,
+        "winners": 211503,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 15474030000,
+        "winners": 3094806,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1170": {
+      "2": {
+        "totalPrize": 4621836600,
+        "winners": 103,
+        "perGamePrize": 44872200,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4621840236,
+        "winners": 5668,
+        "perGamePrize": 815427,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8193300000,
+        "winners": 163866,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13187005000,
+        "winners": 2637401,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1169": {
+      "2": {
+        "totalPrize": 4754559712,
+        "winners": 112,
+        "perGamePrize": 42451426,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4754562112,
+        "winners": 3244,
+        "perGamePrize": 1465648,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8024150000,
+        "winners": 160483,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13340970000,
+        "winners": 2668194,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1168": {
+      "2": {
+        "totalPrize": 4629377840,
+        "winners": 74,
+        "perGamePrize": 62559160,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4629378740,
+        "winners": 3514,
+        "perGamePrize": 1317410,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8308150000,
+        "winners": 166163,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13562725000,
+        "winners": 2712545,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1167": {
+      "2": {
+        "totalPrize": 4806813240,
+        "winners": 69,
+        "perGamePrize": 69663960,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4806813178,
+        "winners": 2942,
+        "perGamePrize": 1633859,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7854700000,
+        "winners": 157094,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13071860000,
+        "winners": 2614372,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1166": {
+      "2": {
+        "totalPrize": 4835413200,
+        "winners": 80,
+        "perGamePrize": 60442665,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4835413255,
+        "winners": 2803,
+        "perGamePrize": 1725085,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7391850000,
+        "winners": 147837,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 12283675000,
+        "winners": 2456735,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1165": {
+      "2": {
+        "totalPrize": 4750384821,
+        "winners": 91,
+        "perGamePrize": 52202031,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4750387144,
+        "winners": 3173,
+        "perGamePrize": 1497128,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 7900700000,
+        "winners": 158014,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13152275000,
+        "winners": 2630455,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1164": {
+      "2": {
+        "totalPrize": 4751699740,
+        "winners": 76,
+        "perGamePrize": 62522365,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4751700020,
+        "winners": 3470,
+        "perGamePrize": 1369366,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8502250000,
+        "winners": 170045,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 14035475000,
+        "winners": 2807095,
+        "perGamePrize": 5000,
+        "criteria": "당첨번호 3개 숫자일치"
+      }
+    },
+    "1163": {
+      "2": {
+        "totalPrize": 4842227925,
+        "winners": 75,
+        "perGamePrize": 64563039,
+        "criteria": "당첨번호 5개 숫자일치 + 보너스 숫자일치"
+      },
+      "3": {
+        "totalPrize": 4842230564,
+        "winners": 3386,
+        "perGamePrize": 1430074,
+        "criteria": "당첨번호 5개 숫자일치"
+      },
+      "4": {
+        "totalPrize": 8410200000,
+        "winners": 168204,
+        "perGamePrize": 50000,
+        "criteria": "당첨번호 4개 숫자일치"
+      },
+      "5": {
+        "totalPrize": 13975135000,
+        "winners": 2795027,
         "perGamePrize": 5000,
         "criteria": "당첨번호 3개 숫자일치"
       }
