@@ -14,7 +14,15 @@ API_ROUND = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={
 # 2~5등 당첨정보 페이지(스크래핑)
 BYWIN_URL = "https://dhlottery.co.kr/gameResult.do?method=byWin&drwNo={round}"
 
-HEADERS = {"User-Agent": "Mozilla/5.0"}
+# [수정] 봇 차단 방지용 헤더 (User-Agent 구체화 + Referer 추가)
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://www.dhlottery.co.kr/"
+}
 
 # 파일에 누적 저장할 최대 회차 개수 (최근 N회)
 KEEP_MAX = 200
@@ -188,6 +196,7 @@ def main():
 
     # 최신 회차 byWin 페이지 가져오기
     url = BYWIN_URL.format(round=latest)
+    # [수정] 헤더 적용
     r = requests.get(url, headers=HEADERS, timeout=20)
     r.raise_for_status()
 
