@@ -24,12 +24,15 @@ LOTTO_API_URL = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drw
 TOPSTORE_BASE_URL = "https://dhlottery.co.kr/store.do"
 TOPSTORE_GET_URL = "https://dhlottery.co.kr/store.do?method=topStore&pageGubun=L645&drwNo={drwNo}"
 
+# [수정] 봇 차단 방지용 헤더 (User-Agent 구체화 + 기본 Referer)
 DEFAULT_HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
     ),
     "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.7,en;q=0.6",
+    "Referer": "https://dhlottery.co.kr/",
 }
 
 ONLINE_STORE_NAME_KEYWORDS = [
@@ -65,7 +68,10 @@ def http_post(session: requests.Session, url: str, data: dict, timeout: int = 25
         try:
             headers = dict(DEFAULT_HEADERS)
             headers["Content-Type"] = "application/x-www-form-urlencoded"
+            # [수정] POST 요청 시 Origin 헤더 추가 (보안 검증 통과용)
+            headers["Origin"] = "https://dhlottery.co.kr"
             headers["Referer"] = "https://dhlottery.co.kr/store.do?method=topStore&pageGubun=L645"
+            
             r = session.post(url, headers=headers, data=data, timeout=timeout)
             r.raise_for_status()
             return r
@@ -94,24 +100,30 @@ def decode_html(resp: requests.Response) -> str:
 # Latest round
 # -----------------------------
 def get_latest_round_from_bywin(session: requests.Session) -> Optional[int]:
-    html = decode_html(http_get(session, BYWIN_URL, timeout=20, retries=3, backoff=0.6))
-    m = re.search(r"lottoDrwNo\s*=\s*(\d+)", html)
-    if m:
-        return int(m.group(1))
-    m = re.search(r'id=["\']lottoDrwNo["\'][^>]*value=["\'](\d+)["\']', html)
-    if m:
-        return int(m.group(1))
-    m = re.search(r"(\d+)\s*회\s*당첨결과", html)
-    if m:
-        return int(m.group(1))
+    try:
+        html = decode_html(http_get(session, BYWIN_URL, timeout=20, retries=3, backoff=0.6))
+        m = re.search(r"lottoDrwNo\s*=\s*(\d+)", html)
+        if m:
+            return int(m.group(1))
+        m = re.search(r'id=["\']lottoDrwNo["\'][^>]*value=["\'](\d+)["\']', html)
+        if m:
+            return int(m.group(1))
+        m = re.search(r"(\d+)\s*회\s*당첨결과", html)
+        if m:
+            return int(m.group(1))
+    except:
+        pass
     return None
 
 
 def lotto_api_success(session: requests.Session, drw_no: int) -> bool:
-    url = LOTTO_API_URL.format(drwNo=drw_no)
-    r = http_get(session, url, timeout=20, retries=3, backoff=0.6)
-    data = r.json()
-    return data.get("returnValue") == "success"
+    try:
+        url = LOTTO_API_URL.format(drwNo=drw_no)
+        r = http_get(session, url, timeout=20, retries=3, backoff=0.6)
+        data = r.json()
+        return data.get("returnValue") == "success"
+    except:
+        return False
 
 
 def find_latest_round_by_api(session: requests.Session, max_hint: int = 2000) -> int:
@@ -561,7 +573,7 @@ def build_json(range_n: int, include_rank2: bool, rank2_limit: Optional[int], ra
                 "failures": failures,
             },
             "byRound": by_round,
-            "byRegion": by_region,           # ✅ "온라인" 키로 따로 들어감
+            "byRegion": by_region,            # ✅ "온라인" 키로 따로 들어감
             "onlineByRank": online_by_rank,  # ✅ 요청사항: 인터넷 카테고리에서 1등/2등 분리 제공
         }
 
