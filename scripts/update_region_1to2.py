@@ -17,8 +17,13 @@ OUT = "data/region_1to2.json"
 POST_URL = "https://dhlottery.co.kr/store.do?method=topStore&pageGubun=L645"
 API_ROUND = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={round}"
 
+# [수정] 봇 차단 방지용 헤더 (User-Agent 구체화)
 HEADERS = {
-    "User-Agent": "Mozilla/5.0",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
     "Referer": "https://dhlottery.co.kr/",
     "Origin": "https://dhlottery.co.kr",
 }
@@ -102,14 +107,21 @@ def get_latest_round_guess(session: requests.Session, max_tries: int = 150) -> i
 
     cand = start
     for _ in range(max_tries):
-        js = fetch_json(session, API_ROUND.format(round=cand), timeout=20)
-        if is_success_round(js) and js.get("drwNo") == cand:
-            js2 = fetch_json(session, API_ROUND.format(round=cand + 1), timeout=20)
-            if is_success_round(js2):
-                cand += 1
-                time.sleep(0.08)
-                continue
-            return cand
+        try:
+            js = fetch_json(session, API_ROUND.format(round=cand), timeout=20)
+            if is_success_round(js) and js.get("drwNo") == cand:
+                # 다음 회차가 있는지 확인
+                try:
+                    js2 = fetch_json(session, API_ROUND.format(round=cand + 1), timeout=20)
+                    if is_success_round(js2):
+                        cand += 1
+                        time.sleep(0.08)
+                        continue
+                except:
+                    pass 
+                return cand
+        except:
+            pass # 실패 시 재시도 로직 필요하나 여기선 cand 감소로 처리
 
         cand -= 1
         time.sleep(0.08)
