@@ -1,48 +1,42 @@
 import json
 import os
-import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import cloudscraper
 from bs4 import BeautifulSoup
 
 OUT = "data/winner_stores.json"
 TOPSTORE_URL = "https://dhlottery.co.kr/store.do"
-API = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={}"
 RANGE = int(os.getenv("WINNER_STORES_RANGE", "10"))
 
-def get_latest(scraper):
-    start = 1200
-    if os.path.exists(OUT):
-        try: start = int(json.load(open(OUT)).get("meta", {}).get("latestRound", 1200))
-        except: pass
-    cand = start
-    for _ in range(50):
-        try:
-            if scraper.get(API.format(cand)).json().get("returnValue") == "success":
-                if scraper.get(API.format(cand+1)).json().get("returnValue") == "success": cand+=1; continue
-                return cand
-        except: pass
-        cand -= 1
-    return start
+ANCHOR_ROUND = 1152
+ANCHOR_DATE = datetime(2024, 12, 28, 20, 0, 0, tzinfo=timezone(timedelta(hours=9)))
+
+def get_latest_round_by_date() -> int:
+    now = datetime.now(timezone(timedelta(hours=9)))
+    weeks = (now - ANCHOR_DATE).days // 7
+    curr = ANCHOR_ROUND + weeks
+    if now.weekday() == 5 and now.hour < 21:
+        curr -= 1
+    return curr
 
 def crawl_round(scraper, rnd):
     rows = []
-    # Rank 1
+    # 1등
     try:
         d = {"method":"topStore", "nowPage":"1", "rankNo":"1", "gameNo":"5133", "drwNo":str(rnd), "schKey":"all", "schVal":""}
-        soup = BeautifulSoup(scraper.post(TOPSTORE_URL, data=d).text, "html.parser")
+        soup = BeautifulSoup(scraper.post(TOPSTORE_URL, data=d, timeout=30).text, "html.parser")
         for tr in soup.select("table tbody tr"):
             tds = [td.text.strip() for td in tr.select("td")]
             if len(tds) > 3 and "조회 결과가 없습니다" not in tds[0]:
                 rows.append({"round":rnd, "rank":1, "storeName":tds[1], "method":tds[2], "address":tds[3]})
     except: pass
     
-    # Rank 2
+    # 2등
     for p in range(1, 100):
         try:
             d = {"method":"topStore", "nowPage":str(p), "rankNo":"2", "gameNo":"5133", "drwNo":str(rnd), "schKey":"all", "schVal":""}
-            soup = BeautifulSoup(scraper.post(TOPSTORE_URL, data=d).text, "html.parser")
+            soup = BeautifulSoup(scraper.post(TOPSTORE_URL, data=d, timeout=30).text, "html.parser")
             trs = soup.select("table tbody tr")
             if not trs or "조회 결과가 없습니다" in trs[0].text: break
             
@@ -60,7 +54,8 @@ def crawl_round(scraper, rnd):
 def main():
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     scraper = cloudscraper.create_scraper()
-    latest = get_latest(scraper)
+    
+    latest = get_latest_round_by_date()
     start = max(1, latest - RANGE + 1)
     
     all_rows = []
