@@ -9,24 +9,24 @@ import os
 import re
 import time
 from typing import Optional, List
-import cloudscraper # MUST be installed via requirements.txt
+import cloudscraper  # requirements.txt에 추가 필수
 
-# The main results page (HTML)
+# 동행복권 메인 당첨결과 페이지 (API 대신 HTML 크롤링 사용)
 BYWIN_URL = "https://dhlottery.co.kr/gameResult.do?method=byWin"
 
 def get_latest_round_from_html() -> int:
     """
-    Fetches the latest round number using cloudscraper to bypass WAF.
+    cloudscraper를 사용하여 보안 페이지(WAF)를 우회하고 최신 회차를 가져옵니다.
     """
-    # Create a scraper instance
+    # [핵심] 일반 requests 대신 cloudscraper 사용
     scraper = cloudscraper.create_scraper()
     
     try:
-        # cloudscraper handles the browser emulation and WAF challenge
+        # 봇 차단 우회 시도
         resp = scraper.get(BYWIN_URL, timeout=30)
         resp.raise_for_status()
         
-        # Encoding fix
+        # 인코딩 처리
         if resp.encoding is None or resp.encoding.lower() == 'iso-8859-1':
             resp.encoding = resp.apparent_encoding
             
@@ -36,91 +36,7 @@ def get_latest_round_from_html() -> int:
         print(f"[ERROR] Cloudscraper failed: {e}")
         raise RuntimeError(f"Failed to fetch page: {e}")
 
-    # Parse round number
+    # 다양한 패턴으로 회차 번호 추출
     patterns = [
-        r'<option[^>]*value=["\'](\d+)["\'][^>]*selected',
-        r'id=["\']drwNo["\'][^>]*value=["\'](\d+)["\']',
-        r'<strong>(\d+)회</strong>',
-        r'value=["\'](\d+)["\']'
-    ]
-    
-    for pat in patterns:
-        m = re.search(pat, html)
-        if m:
-            return int(m.group(1))
-            
-    print("[DEBUG] HTML Content start (for debugging):")
-    print(html[:500])
-    raise RuntimeError("Failed to parse latest round from HTML")
-
-def read_local_latest_round(data_files: List[str]) -> Optional[int]:
-    max_round = None
-    for path in data_files:
-        if not path or not os.path.exists(path):
-            continue
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            
-            meta = data.get("meta") or {}
-            v = meta.get("latestRound")
-            
-            if v is None and "rounds" in data:
-                keys = [int(k) for k in data["rounds"].keys() if str(k).isdigit()]
-                if keys:
-                    v = max(keys)
-
-            if v is not None:
-                v = int(v)
-                if max_round is None or v > max_round:
-                    max_round = v
-        except Exception:
-            continue
-    return max_round
-
-def write_github_output(needs_update: bool, latest_remote: int, latest_local: Optional[int]) -> None:
-    out_path = os.environ.get("GITHUB_OUTPUT")
-    if not out_path:
-        return
-    
-    with open(out_path, "a", encoding="utf-8") as f:
-        f.write(f"needs_update={'true' if needs_update else 'false'}\n")
-        f.write(f"latest_remote={latest_remote}\n")
-        f.write(f"latest_local={'' if latest_local is None else latest_local}\n")
-
-def is_force_update() -> bool:
-    v = (os.getenv("FORCE_UPDATE") or "").strip().lower()
-    return v in ("1", "true", "yes", "y", "on")
-
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data-files", nargs="*", default=[])
-    args = parser.parse_args()
-
-    latest_local = read_local_latest_round(args.data_files)
-    
-    try:
-        latest_remote = get_latest_round_from_html()
-    except Exception as e:
-        print(f"[CRITICAL] {e}")
-        return 1
-
-    if is_force_update():
-        needs_update = True
-        print("[GUARD] Force update enabled.")
-    else:
-        if latest_local is None:
-            needs_update = True
-            print("[GUARD] No local data found. Update needed.")
-        elif latest_remote > latest_local:
-            needs_update = True
-            print(f"[GUARD] Update needed: remote({latest_remote}) > local({latest_local})")
-        else:
-            needs_update = False
-            print(f"[GUARD] Up to date.")
-
-    write_github_output(needs_update, latest_remote, latest_local)
-    return 0
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+        r'<option[^>]*value=["\'](\d+)["\'][^>]*selected',  # 드롭박스 선택된 값
+        r'id=["\']drwNo["\'][^>]*value=["\'](\d+)["\']',     # hidden input
