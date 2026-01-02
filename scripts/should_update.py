@@ -13,12 +13,15 @@ import requests
 
 LOTTO_API_URL = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={drwNo}"
 
+# [수정 1] 봇 차단 방지를 위해 헤더를 윈도우 크롬으로 변경하고 Referer 추가
 DEFAULT_HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
     ),
     "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.7,en;q=0.6",
+    "Referer": "https://www.dhlottery.co.kr/",
 }
 
 
@@ -31,8 +34,16 @@ def http_get_json(url: str, timeout: int = 20, retries: int = 4, backoff: float 
             return resp.json()
         except Exception as e:
             last_exc = e
+            # [수정 2] 에러 발생 시 서버가 반환한 텍스트를 출력하여 디버깅 (JSON 파싱 실패 원인 확인용)
+            if i == retries - 1: # 마지막 시도에서도 실패하면
+                try:
+                    print(f"[DEBUG] Failed Response Text (First 500 chars): {resp.text[:500]}")
+                except:
+                    pass
+            
             if i < retries - 1:
                 time.sleep(backoff * (i + 1))
+                
     raise RuntimeError(f"HTTP JSON GET failed: {url} ({last_exc})")
 
 
