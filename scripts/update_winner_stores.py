@@ -68,8 +68,6 @@ def main():
         all_rows.extend(crawl_round(scraper, r))
         time.sleep(0.2)
         
-    # Aggregate
-    # (간소화 로직)
     by_round = {}
     for row in all_rows:
         by_round.setdefault(str(row["round"]), []).append(row)
