@@ -5,74 +5,62 @@ import cloudscraper
 
 OUT = "data/heatmap.json"
 API = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={round}"
-
 RANGE = 40
+
+# [기준일] 1152회차 = 2024년 12월 28일
+ANCHOR_ROUND = 1152
+ANCHOR_DATE = datetime.datetime(2024, 12, 28, 20, 0, 0, tzinfo=datetime.timezone(datetime.timedelta(hours=9)))
 
 def ensure_dirs():
     os.makedirs("data", exist_ok=True)
 
-def fetch_round(scraper, rnd: int) -> dict:
-    r = scraper.get(API.format(round=rnd), timeout=30)
-    r.raise_for_status()
-    return r.json()
-
-def guess_latest(scraper, start: int = 1200, max_tries: int = 80) -> int:
-    cand = start
-    for _ in range(max_tries):
-        try:
-            js = fetch_round(scraper, cand)
-            if js.get("returnValue") == "success" and js.get("drwNo") == cand:
-                try:
-                    js2 = fetch_round(scraper, cand + 1)
-                    if js2.get("returnValue") == "success":
-                        cand += 1
-                        continue
-                except:
-                    pass
-                return cand
-        except:
-            pass
-        cand -= 1
-    raise RuntimeError("latestRound 찾기 실패.")
-
 def now_kst_iso():
-    kst = datetime.timezone(datetime.timedelta(hours=9))
-    return datetime.datetime.now(kst).isoformat(timespec="seconds")
+    return datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).isoformat(timespec="seconds")
+
+def get_latest_round_by_date() -> int:
+    """날짜 기반 회차 계산 (서버 접속 X -> 차단 방지)"""
+    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
+    weeks = (now - ANCHOR_DATE).days // 7
+    curr = ANCHOR_ROUND + weeks
+    # 토요일 21시 이전이면 아직 추첨 전
+    if now.weekday() == 5 and now.hour < 21:
+        curr -= 1
+    return curr
+
+def fetch_round(scraper, rnd: int) -> dict:
+    # cloudscraper로 데이터 수집
+    try:
+        r = scraper.get(API.format(round=rnd), timeout=30)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        print(f"[WARN] Fetch failed for {rnd}: {e}")
+        return {"returnValue": "fail"}
 
 def main():
     ensure_dirs()
     scraper = cloudscraper.create_scraper()
 
-    start = 1200
-    if os.path.exists(OUT):
-        try:
-            with open(OUT, "r", encoding="utf-8") as f:
-                j = json.load(f) or {}
-            start = int((j.get("meta", {}) or {}).get("latestRound", start))
-        except Exception:
-            pass
+    # 1. 최신 회차 계산 (API 사용 안 함)
+    latest = get_latest_round_by_date()
+    print(f"[INFO] Calculated Latest Round: {latest}")
 
-    latest = guess_latest(scraper, start=start)
-    start_round = max(1, latest - RANGE + 1)
-
+    # 2. 로컬 데이터 확인
     counts = {str(i): 0 for i in range(1, 46)}
-
+    
+    # 3. 데이터 수집
+    start_round = max(1, latest - RANGE + 1)
     for rnd in range(start_round, latest + 1):
-        try:
-            js = fetch_round(scraper, rnd)
-        except Exception as e:
-            print(f"Skipping round {rnd}: {e}")
-            continue
-
+        js = fetch_round(scraper, rnd)
         if js.get("returnValue") != "success":
+            print(f"[SKIP] Round {rnd} data missing or failed.")
             continue
-        nums = [
-            js.get("drwtNo1"), js.get("drwtNo2"), js.get("drwtNo3"),
-            js.get("drwtNo4"), js.get("drwtNo5"), js.get("drwtNo6"),
-        ]
-        for n in nums:
-            if isinstance(n, int) and 1 <= n <= 45:
-                counts[str(n)] += 1
+            
+        # 번호 카운팅
+        for k in [f"drwtNo{i}" for i in range(1, 7)]:
+            val = js.get(k)
+            if isinstance(val, int) and 1 <= val <= 45:
+                counts[str(val)] += 1
 
     out = {
         "meta": {
